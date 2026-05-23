@@ -16,6 +16,7 @@ export class SignalingClient {
     this.url = url;
     this.ws = null;
     this.listeners = new Map();
+    this.pendingEvents = new Map();
     this.reconnectAttempts = 0;
     this.intentionalClose = false;
     this.suppressNextDisconnectEvent = false;
@@ -147,6 +148,19 @@ export class SignalingClient {
       this.listeners.set(event, new Set());
     }
     this.listeners.get(event).add(callback);
+
+    const pending = this.pendingEvents.get(event);
+    if (pending?.length) {
+      this.pendingEvents.delete(event);
+      pending.forEach((payload) => {
+        try {
+          callback(payload);
+        } catch (err) {
+          console.error('[Signaling] Listener error:', err);
+        }
+      });
+    }
+
     return () => this.off(event, callback);
   }
 
@@ -163,6 +177,7 @@ export class SignalingClient {
   disconnect() {
     this._closeSocket({ intentional: true, suppressDisconnectEvent: false, reason: 'Client disconnect' });
     this.listeners.clear();
+    this.pendingEvents.clear();
     this.token = null;
     this.roomCode = null;
     this.lastQueryParams = {};
@@ -206,8 +221,20 @@ export class SignalingClient {
   }
 
   _emit(event, data) {
-    this.listeners.get(event)?.forEach(cb => {
-      try { cb(data); } catch (err) {
+    const listeners = this.listeners.get(event);
+
+    if (!listeners || listeners.size === 0) {
+      if (!this.pendingEvents.has(event)) {
+        this.pendingEvents.set(event, []);
+      }
+      this.pendingEvents.get(event).push(data);
+      return;
+    }
+
+    listeners.forEach((callback) => {
+      try {
+        callback(data);
+      } catch (err) {
         console.error('[Signaling] Listener error:', err);
       }
     });

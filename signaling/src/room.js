@@ -27,9 +27,22 @@ export class SignalingRoom {
       fileMetadata: null,
       createdAt: null,
     };
+    // Block concurrent requests until persisted state is loaded after
+    // hibernation/eviction. Without this, in-memory state would be lost
+    // across DO restarts (room password & status), allowing receivers to
+    // join password-protected rooms without supplying a password.
+    this._loaded = ctx.blockConcurrencyWhile(async () => {
+      const stored = await ctx.storage.get('roomState');
+      if (stored) this.state = stored;
+    });
+  }
+
+  async _persist() {
+    await this.ctx.storage.put('roomState', this.state);
   }
 
   async fetch(request) {
+    await this._loaded;
     const url = new URL(request.url);
 
     if (request.headers.get('Upgrade') !== 'websocket') {
@@ -54,6 +67,7 @@ export class SignalingRoom {
       this.state.password = url.searchParams.get('roomPassword') || null;
       this.state.status = ROOM_STATES.WAITING;
       this.state.createdAt = Date.now();
+      await this._persist();
 
       // Set expiry alarm
       await this.ctx.storage.setAlarm(Date.now() + ROOM_EXPIRY_MS);
@@ -89,6 +103,7 @@ export class SignalingRoom {
       }
 
       this.state.status = ROOM_STATES.RECEIVER_JOINED;
+      await this._persist();
 
       // Notify receiver they joined
       server.send(JSON.stringify({
@@ -112,6 +127,7 @@ export class SignalingRoom {
   }
 
   async webSocketMessage(ws, message) {
+    await this._loaded;
     // Handle binary messages (WS relay)
     if (message instanceof ArrayBuffer) {
       this._broadcastBinary(ws, message);
@@ -138,6 +154,7 @@ export class SignalingRoom {
           type: payload.type,
           totalChunks: payload.totalChunks,
         };
+        await this._persist();
         this._broadcastToOther(ws, message);
         break;
 
@@ -145,6 +162,7 @@ export class SignalingRoom {
       case MSG.SDP_ANSWER:
       case MSG.ICE_CANDIDATE:
         this.state.status = ROOM_STATES.NEGOTIATING;
+        await this._persist();
         this._broadcastToOther(ws, message);
         break;
 
@@ -182,6 +200,7 @@ export class SignalingRoom {
   }
 
   async webSocketClose(ws, code, reason, wasClean) {
+    await this._loaded;
     // If sender disconnects, destroy room
     const tags = this.ctx.getTags(ws);
     if (tags?.includes('sender')) {
@@ -200,6 +219,7 @@ export class SignalingRoom {
         }));
       }
       this.state.status = ROOM_STATES.WAITING;
+      await this._persist();
     }
   }
 
@@ -209,6 +229,7 @@ export class SignalingRoom {
   }
 
   async alarm() {
+    await this._loaded;
     // Room expired
     this.state.status = ROOM_STATES.EXPIRED;
     this._broadcastAll(JSON.stringify({
@@ -263,5 +284,7 @@ export class SignalingRoom {
       fileMetadata: null,
       createdAt: null,
     };
+    // Best-effort wipe of persisted state; ignore errors during teardown.
+    try { this.ctx.storage.deleteAll(); } catch { /* ignore */ }
   }
 }

@@ -7,13 +7,13 @@ import { FilePreview } from '../components/FilePreview';
 import { useSignaling } from '../hooks/useSignaling';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useFileTransfer } from '../hooks/useFileTransfer';
-import { MSG, ROOM_STATES, CONNECTION_TYPES, formatFileSize, getFileIcon } from '../lib/constants';
+import { MSG, ROOM_STATES, formatFileSize, getFileIcon } from '../lib/constants';
 import './TransferRoom.css';
 
 export function TransferRoom() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, file, roomCode, fileMetadata: initialMetadata } = location.state || {};
+  const { role, file, fileMetadata: initialMetadata } = location.state || {};
 
   const signaling = useSignaling();
   const webrtc = useWebRTC();
@@ -23,6 +23,7 @@ export function TransferRoom() {
   const [error, setError] = useState(null);
   const isSender = role === 'sender';
   const hasStartedRef = useRef(false);
+  const displayRoomStatus = fileTransfer.transferState === 'completed' ? ROOM_STATES.COMPLETED : roomStatus;
 
   // Redirect if no state
   useEffect(() => {
@@ -34,12 +35,14 @@ export function TransferRoom() {
   // WebRTC negotiation
   useEffect(() => {
     if (hasStartedRef.current || !signaling.client) return;
+
     hasStartedRef.current = true;
 
     const setupWebRTC = async () => {
       try {
-        // Ensure signaling is connected
-        if (!signaling.connected) {
+        // Reuse the existing room socket across route changes.
+        // If it dropped unexpectedly, reconnect through the same singleton client.
+        if (!signaling.client?.connected) {
           await signaling.connect();
         }
 
@@ -126,9 +129,8 @@ export function TransferRoom() {
   useEffect(() => {
     if (fileTransfer.transferState === 'completed') {
       signaling.send(MSG.TRANSFER_COMPLETE);
-      setRoomStatus(ROOM_STATES.COMPLETED);
     }
-  }, [fileTransfer.transferState]);
+  }, [fileTransfer.transferState, signaling]);
 
   const handleCancel = useCallback(() => {
     fileTransfer.cancel();
@@ -179,11 +181,11 @@ export function TransferRoom() {
       )}
 
       {/* Negotiating state */}
-      {(roomStatus === ROOM_STATES.NEGOTIATING || roomStatus === ROOM_STATES.RELAY_FALLBACK) && !error && (
+      {(displayRoomStatus === ROOM_STATES.NEGOTIATING || displayRoomStatus === ROOM_STATES.RELAY_FALLBACK) && !error && (
         <div className="negotiating-section">
           <div className="negotiating-spinner" />
           <div className="negotiating-text">
-            {roomStatus === ROOM_STATES.RELAY_FALLBACK
+            {displayRoomStatus === ROOM_STATES.RELAY_FALLBACK
               ? 'Trying relay connection...'
               : 'Establishing secure connection...'}
           </div>
@@ -191,7 +193,7 @@ export function TransferRoom() {
       )}
 
       {/* Transfer in progress */}
-      {(roomStatus === ROOM_STATES.TRANSFERRING || roomStatus === ROOM_STATES.CONNECTED) && (
+      {(displayRoomStatus === ROOM_STATES.TRANSFERRING || displayRoomStatus === ROOM_STATES.CONNECTED) && (
         <div className="transfer-progress-section">
           <TransferProgress stats={fileTransfer.stats} />
           <TransferStats stats={fileTransfer.stats} connectionType={webrtc.connectionType} />
@@ -215,7 +217,7 @@ export function TransferRoom() {
       )}
 
       {/* Transfer complete */}
-      {roomStatus === ROOM_STATES.COMPLETED && (
+      {displayRoomStatus === ROOM_STATES.COMPLETED && (
         <div className="transfer-complete">
           <div className="transfer-complete-icon">✅</div>
           <div className="transfer-complete-title">Transfer Complete!</div>
@@ -254,13 +256,13 @@ export function TransferRoom() {
       )}
 
       {/* Error / Failed state */}
-      {(roomStatus === ROOM_STATES.FAILED || roomStatus === ROOM_STATES.CANCELLED) && (
+      {(displayRoomStatus === ROOM_STATES.FAILED || displayRoomStatus === ROOM_STATES.CANCELLED) && (
         <div className="transfer-failed">
           <div className="transfer-failed-icon">
-            {roomStatus === ROOM_STATES.CANCELLED ? '🚫' : '❌'}
+            {displayRoomStatus === ROOM_STATES.CANCELLED ? '🚫' : '❌'}
           </div>
           <div className="transfer-failed-title">
-            {roomStatus === ROOM_STATES.CANCELLED ? 'Transfer Cancelled' : 'Transfer Failed'}
+            {displayRoomStatus === ROOM_STATES.CANCELLED ? 'Transfer Cancelled' : 'Transfer Failed'}
           </div>
           <div className="transfer-failed-message">
             {error || 'Something went wrong during the transfer.'}

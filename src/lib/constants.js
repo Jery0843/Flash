@@ -3,8 +3,9 @@
    ═══════════════════════════════════════════════════════════ */
 
 // ── Transfer Configuration ─────────────────────────────────
-export const CHUNK_SIZE = 65536; // 64 KiB — optimal for WebRTC SCTP
-export const BUFFER_THRESHOLD = 1048576; // 1 MiB — bufferedAmountLowThreshold
+export const CHUNK_SIZE = 262144; // 256 KiB — faster for large transfers while staying browser-safe
+export const BUFFER_HIGH_WATER_MARK = 4 * 1024 * 1024; // Pause sending above 4 MiB buffered
+export const BUFFER_LOW_WATER_MARK = 1024 * 1024; // Resume aggressively once buffered data drains near 1 MiB
 export const MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024; // 4 GB
 export const SPEED_WINDOW_MS = 3000; // Rolling 3s window for speed calc
 

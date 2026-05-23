@@ -4,11 +4,18 @@
    Works with both WebRTC DataChannel and WebSocket relay.
    ═══════════════════════════════════════════════════════════ */
 
-import { CHUNK_SIZE, BUFFER_THRESHOLD, SPEED_WINDOW_MS } from './constants';
+import {
+  CHUNK_SIZE,
+  BUFFER_HIGH_WATER_MARK,
+  BUFFER_LOW_WATER_MARK,
+  SPEED_WINDOW_MS,
+} from './constants';
 
 // ── Binary Header Protocol ─────────────────────────────────
 // Each chunk: [4B chunk_index] [4B total_chunks] [payload]
 const HEADER_SIZE = 8;
+const CHUNKS_PER_BATCH = 16;
+const RESUME_POLL_MS = 16;
 
 function encodeChunk(index, total, data) {
   const header = new ArrayBuffer(HEADER_SIZE);
@@ -29,6 +36,12 @@ function decodeChunk(buffer) {
   return { index, total, data };
 }
 
+function waitForNextFrame() {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 // ── Progress Tracker ───────────────────────────────────────
 class ProgressTracker {
   constructor(totalBytes) {
@@ -44,15 +57,13 @@ class ProgressTracker {
     this.bytesTransferred += bytes;
     const now = Date.now();
 
-    // Record sample for speed calculation
     if (now - this.lastSampleTime >= 200) {
       this.speedSamples.push({
         time: now,
         bytes: this.bytesTransferred,
       });
-      // Keep only samples within the speed window
       const cutoff = now - SPEED_WINDOW_MS;
-      this.speedSamples = this.speedSamples.filter(s => s.time >= cutoff);
+      this.speedSamples = this.speedSamples.filter((sample) => sample.time >= cutoff);
       this.lastSampleTime = now;
       this.lastSampleBytes = this.bytesTransferred;
     }
@@ -120,11 +131,10 @@ export class FileSender {
     this.onComplete = null;
     this.onError = null;
     this._sending = false;
+    this._bufferCleanup = null;
+    this._resumeTimer = null;
   }
 
-  /**
-   * Get file metadata for the receiver.
-   */
   getMetadata() {
     return {
       name: this.file.name,
@@ -135,33 +145,23 @@ export class FileSender {
     };
   }
 
-  /**
-   * Start sending the file.
-   */
   async start() {
     if (this._sending) return;
-    this._sending = true;
 
-    // Set buffer threshold for backpressure
     if (this.transport.setBufferThreshold) {
-      this.transport.setBufferThreshold(BUFFER_THRESHOLD);
+      this.transport.setBufferThreshold(BUFFER_LOW_WATER_MARK);
     }
 
-    // Listen for buffer drain events
-    const bufferCleanup = this.transport.on?.('buffer-low', () => {
-      if (!this.paused && !this.cancelled) {
-        this._sendChunks();
-      }
+    this._bufferCleanup = this.transport.on?.('buffer-low', () => {
+      this._scheduleResume(0);
     });
 
     try {
-      await this._sendChunks();
+      await this._pump();
     } catch (err) {
       if (!this.cancelled) {
         this.onError?.(err);
       }
-    } finally {
-      bufferCleanup?.();
     }
   }
 
@@ -172,53 +172,99 @@ export class FileSender {
   resume() {
     if (this.paused) {
       this.paused = false;
-      this._sendChunks();
+      this._scheduleResume(0);
     }
   }
 
   cancel() {
     this.cancelled = true;
     this.paused = false;
+    this._clearResumeTimer();
+    this._bufferCleanup?.();
   }
 
-  async _sendChunks() {
-    while (
-      this.currentChunk < this.totalChunks &&
-      !this.paused &&
-      !this.cancelled
-    ) {
-      // Backpressure: wait if buffer is full
-      const buffered = this.transport.bufferedAmount ?? 0;
-      if (buffered > BUFFER_THRESHOLD) {
-        return; // Will resume on 'buffer-low' event
-      }
+  async _pump() {
+    if (this._sending || this.paused || this.cancelled) return;
+    this._sending = true;
 
-      const offset = this.currentChunk * CHUNK_SIZE;
-      const end = Math.min(offset + CHUNK_SIZE, this.file.size);
-      const blob = this.file.slice(offset, end);
+    try {
+      while (this.currentChunk < this.totalChunks && !this.paused && !this.cancelled) {
+        let sentInBatch = 0;
 
-      try {
-        const arrayBuffer = await blob.arrayBuffer();
-        const encoded = encodeChunk(this.currentChunk, this.totalChunks, arrayBuffer);
-        
-        const sent = this.transport.send(encoded);
-        if (!sent) {
-          throw new Error('Failed to send chunk');
+        while (
+          sentInBatch < CHUNKS_PER_BATCH &&
+          this.currentChunk < this.totalChunks &&
+          !this.paused &&
+          !this.cancelled
+        ) {
+          const buffered = this.transport.bufferedAmount ?? 0;
+          if (buffered >= BUFFER_HIGH_WATER_MARK) {
+            this._scheduleResume();
+            return;
+          }
+
+          const offset = this.currentChunk * CHUNK_SIZE;
+          const end = Math.min(offset + CHUNK_SIZE, this.file.size);
+          const blob = this.file.slice(offset, end);
+          const arrayBuffer = await blob.arrayBuffer();
+          const encoded = encodeChunk(this.currentChunk, this.totalChunks, arrayBuffer);
+          const sent = this.transport.send(encoded);
+
+          if (!sent) {
+            throw new Error('Failed to send chunk');
+          }
+
+          this.tracker.update(end - offset);
+          this.currentChunk += 1;
+          sentInBatch += 1;
+          this.onProgress?.(this.tracker.getStats());
         }
 
-        this.tracker.update(end - offset);
-        this.currentChunk++;
-        this.onProgress?.(this.tracker.getStats());
-      } catch (err) {
+        if (this.currentChunk < this.totalChunks) {
+          await waitForNextFrame();
+        }
+      }
+
+      if (this.currentChunk >= this.totalChunks && !this.cancelled) {
+        this._bufferCleanup?.();
+        this._clearResumeTimer();
+        this.onComplete?.(this.tracker.getStats());
+      }
+    } catch (err) {
+      if (!this.cancelled) {
+        this.onError?.(err);
+      }
+    } finally {
+      this._sending = false;
+    }
+  }
+
+  _scheduleResume(delay = RESUME_POLL_MS) {
+    if (this.paused || this.cancelled || this._resumeTimer) return;
+
+    this._resumeTimer = setTimeout(() => {
+      this._resumeTimer = null;
+
+      if (this.paused || this.cancelled) return;
+
+      const buffered = this.transport.bufferedAmount ?? 0;
+      if (buffered >= BUFFER_LOW_WATER_MARK) {
+        this._scheduleResume();
+        return;
+      }
+
+      this._pump().catch((err) => {
         if (!this.cancelled) {
           this.onError?.(err);
         }
-        return;
-      }
-    }
+      });
+    }, delay);
+  }
 
-    if (this.currentChunk >= this.totalChunks && !this.cancelled) {
-      this.onComplete?.(this.tracker.getStats());
+  _clearResumeTimer() {
+    if (this._resumeTimer) {
+      clearTimeout(this._resumeTimer);
+      this._resumeTimer = null;
     }
   }
 }
@@ -242,22 +288,17 @@ export class FileReceiver {
     this.cancelled = false;
   }
 
-  /**
-   * Handle a received chunk (binary data).
-   */
   handleChunk(buffer) {
     if (this.cancelled) return;
 
     try {
       const { index, total, data } = decodeChunk(buffer);
 
-      // Validate chunk
       if (index < 0 || index >= total || total !== this.metadata.totalChunks) {
         console.warn('[FileReceiver] Invalid chunk:', index, 'of', total);
         return;
       }
 
-      // Avoid duplicate chunks
       if (this.chunks[index]) return;
 
       this.chunks[index] = data;
@@ -265,7 +306,6 @@ export class FileReceiver {
       this.tracker.update(data.byteLength);
       this.onProgress?.(this.tracker.getStats());
 
-      // Check completion
       if (this.receivedCount === this.metadata.totalChunks) {
         this._assemble();
       }
@@ -281,13 +321,12 @@ export class FileReceiver {
 
   _assemble() {
     try {
-      const blob = new Blob(this.chunks.map(c => new Uint8Array(c)), {
+      const blob = new Blob(this.chunks.map((chunk) => new Uint8Array(chunk)), {
         type: this.metadata.type,
       });
-      
-      // Free chunk memory
+
       this.chunks = [];
-      
+
       this.onComplete?.({
         blob,
         metadata: this.metadata,
@@ -303,10 +342,6 @@ export class FileReceiver {
 // Transport Adapter — wraps DataChannel or WebSocket
 // ═══════════════════════════════════════════════════════════
 
-/**
- * Creates a unified transport interface from either a
- * WebRTC DataChannel or a WebSocket connection.
- */
 export function createTransport(channel) {
   const listeners = new Map();
 
@@ -336,10 +371,9 @@ export function createTransport(channel) {
       }
       listeners.get(event).add(callback);
 
-      // Map to native events
       if (event === 'buffer-low') {
         channel.onbufferedamountlow = () => {
-          listeners.get('buffer-low')?.forEach(cb => cb());
+          listeners.get('buffer-low')?.forEach((cb) => cb());
         };
       }
 
@@ -364,11 +398,6 @@ export function downloadBlob(blob, filename) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
-  a.style.display = 'none';
-  document.body.appendChild(a);
   a.click();
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-  }, 100);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

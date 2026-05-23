@@ -100,6 +100,19 @@ export function TransferRoom() {
           signaling.send(MSG.SDP_ANSWER, { sdp: answer });
         });
 
+        // Handle ICE restart offers (for reconnection)
+        manager.on('ice-restart-offer', async (offer) => {
+          console.log('[TransferRoom] Received ICE restart offer');
+          if (isSender) {
+            // Sender initiated ICE restart, send via signaling
+            signaling.send(MSG.SDP_OFFER, { sdp: offer, targetPeerId: peerId });
+          } else {
+            // Receiver received ICE restart offer, respond with answer
+            const answer = await manager.handleOffer(offer);
+            signaling.send(MSG.SDP_ANSWER, { sdp: answer });
+          }
+        });
+
         signaling.on(MSG.SDP_ANSWER, async (data) => {
           // For senders, only process answers from the expected peer
           if (isSender && peerId && data.peerId !== peerId) {

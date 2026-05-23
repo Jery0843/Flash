@@ -55,6 +55,11 @@ export class MultiPeerSender {
         this.signaling.send(MSG.ICE_CANDIDATE, { candidate, targetPeerId: peerId });
       });
 
+      webrtc.on('ice-restart-offer', (offer) => {
+        console.log('[MultiPeerSender] ICE restart initiated for peer:', peerId);
+        this.signaling.send(MSG.SDP_OFFER, { sdp: offer, targetPeerId: peerId });
+      });
+
       webrtc.on('connection-type', (t) => {
         peer.connectionType = t;
         this._emit();

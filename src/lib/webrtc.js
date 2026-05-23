@@ -27,6 +27,10 @@ export class WebRTCManager {
     this.iceTimeout = null;
     this.iceCandidateBuffer = [];
     this.isInitiator = false;
+    this.keepaliveInterval = null;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 3;
+    this.reconnectDelay = 2000;
   }
 
   /**
@@ -56,16 +60,19 @@ export class WebRTCManager {
       if (state === 'connected' || state === 'completed') {
         this._clearIceTimeout();
         this._detectConnectionType();
+        this.reconnectAttempts = 0; // Reset on successful connection
       } else if (state === 'failed') {
         this._clearIceTimeout();
-        this._emit('connection-failed');
+        // Attempt ICE restart before giving up
+        this._attemptReconnection();
       } else if (state === 'disconnected') {
         // WebRTC may recover automatically; wait before reporting
+        // Increased from 5s to 30s to handle transient network issues
         setTimeout(() => {
           if (this.pc?.iceConnectionState === 'disconnected') {
-            this._emit('connection-failed');
+            this._attemptReconnection();
           }
-        }, 5000);
+        }, 30000);
       }
     };
 
@@ -161,6 +168,7 @@ export class WebRTCManager {
    */
   close() {
     this._clearIceTimeout();
+    this._stopKeepalive();
     if (this.dataChannel) {
       this.dataChannel.close();
       this.dataChannel = null;
@@ -171,6 +179,35 @@ export class WebRTCManager {
     }
     this.listeners.clear();
     this.connectionType = null;
+    this.reconnectAttempts = 0;
+  }
+
+  /**
+   * Attempt to restart ICE connection on failure.
+   * This creates a new ICE negotiation to re-establish the connection.
+   */
+  async restartIce() {
+    if (!this.pc || this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.warn('[WebRTC] Max reconnection attempts reached or no connection');
+      return false;
+    }
+
+    this.reconnectAttempts++;
+    console.log(`[WebRTC] Attempting ICE restart (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+
+    try {
+      // Create a new offer with ICE restart flag
+      const offer = await this.pc.createOffer({ iceRestart: true });
+      await this.pc.setLocalDescription(offer);
+      
+      // Emit the new offer for the remote peer
+      this._emit('ice-restart-offer', offer);
+      
+      return true;
+    } catch (err) {
+      console.error('[WebRTC] ICE restart failed:', err);
+      return false;
+    }
   }
 
   /**
@@ -195,9 +232,11 @@ export class WebRTCManager {
 
     channel.onopen = () => {
       this._emit('channel-open');
+      this._startKeepalive();
     };
 
     channel.onclose = () => {
+      this._stopKeepalive();
       this._emit('channel-close');
     };
 
@@ -207,6 +246,10 @@ export class WebRTCManager {
     };
 
     channel.onmessage = (event) => {
+      // Handle keepalive pong
+      if (event.data === 'pong') {
+        return;
+      }
       this._emit('data', event.data);
     };
 
@@ -260,6 +303,59 @@ export class WebRTCManager {
       clearTimeout(this.iceTimeout);
       this.iceTimeout = null;
     }
+  }
+
+  _startKeepalive() {
+    this._stopKeepalive();
+    // Send ping every 15 seconds to keep connection alive
+    this.keepaliveInterval = setInterval(() => {
+      if (this.dataChannel && this.dataChannel.readyState === 'open') {
+        try {
+          this.dataChannel.send('ping');
+        } catch (err) {
+          console.warn('[WebRTC] Keepalive failed:', err);
+        }
+      }
+    }, 15000);
+  }
+
+  _stopKeepalive() {
+    if (this.keepaliveInterval) {
+      clearInterval(this.keepaliveInterval);
+      this.keepaliveInterval = null;
+    }
+  }
+
+  /**
+   * Attempt to reconnect on transient failures.
+   * Tries ICE restart first, then falls back to reporting failure.
+   */
+  async _attemptReconnection() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.warn('[WebRTC] Max reconnection attempts reached');
+      this._emit('connection-failed');
+      return;
+    }
+
+    // Exponential backoff for reconnection attempts
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
+    
+    console.log(`[WebRTC] Connection lost, attempting reconnection in ${delay}ms (attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+    
+    setTimeout(async () => {
+      // Check if connection recovered automatically
+      if (this.pc && (this.pc.iceConnectionState === 'connected' || this.pc.iceConnectionState === 'completed')) {
+        console.log('[WebRTC] Connection recovered automatically');
+        this.reconnectAttempts = 0;
+        return;
+      }
+
+      // Try ICE restart
+      const restartSuccess = await this.restartIce();
+      if (!restartSuccess) {
+        this._emit('connection-failed');
+      }
+    }, delay);
   }
 
   /**

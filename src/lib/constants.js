@@ -26,9 +26,16 @@ export const TURN_CREDENTIALS_URL = import.meta.env.VITE_TURN_CREDENTIALS_URL ||
 // In production, TURN credentials are fetched from the signaling server
 // with short-lived HMAC-based authentication (5-min TTL).
 export const DEFAULT_ICE_SERVERS = [
-  // Tier 1: STUN (free, Google)
+  // Tier 1: STUN (multiple providers for redundancy)
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:stun.ekiga.net:3478' },
+  { urls: 'stun:stun.ideasip.com:3478' },
+  { urls: 'stun:stun.rixtelecom.se:3478' },
+  { urls: 'stun:stun.sipgate.net:3478' },
+  { urls: 'stun:stun.stunprotocol.org:3478' },
   // Tier 2: TURN — credentials injected at runtime from /turn-credentials
   // {
   //   urls: 'turns:your-turn-server.metered.ca:443',

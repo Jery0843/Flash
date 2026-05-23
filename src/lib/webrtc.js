@@ -1,0 +1,303 @@
+/* ═══════════════════════════════════════════════════════════
+   Flash — WebRTC Manager
+   RTCPeerConnection + RTCDataChannel management with
+   3-tier connection strategy (P2P → TURN → WS fallback)
+   ═══════════════════════════════════════════════════════════ */
+
+import {
+  WEBRTC_CONFIG, DATA_CHANNEL_CONFIG, ICE_TIMEOUT_MS,
+  TURN_CREDENTIALS_URL, CONNECTION_TYPES,
+} from './constants';
+
+/**
+ * WebRTCManager handles the peer connection lifecycle.
+ * 
+ * Security notes:
+ * - All DataChannel traffic is DTLS-encrypted by the browser automatically.
+ * - ICE candidates contain IP addresses but are only exchanged via WSS signaling.
+ * - TURN credentials are short-lived (5-min TTL), fetched from the server.
+ * - The UI never displays IP addresses to users.
+ */
+export class WebRTCManager {
+  constructor() {
+    this.pc = null;
+    this.dataChannel = null;
+    this.connectionType = null;
+    this.listeners = new Map();
+    this.iceTimeout = null;
+    this.iceCandidateBuffer = [];
+    this.isInitiator = false;
+  }
+
+  /**
+   * Initialize the peer connection.
+   * @param {boolean} initiator - true for sender, false for receiver
+   */
+  async init(initiator) {
+    this.isInitiator = initiator;
+    
+    // Fetch TURN credentials for global connectivity
+    const config = await this._getIceConfig();
+    
+    this.pc = new RTCPeerConnection(config);
+
+    // ICE candidate handling
+    this.pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        this._emit('ice-candidate', event.candidate);
+      }
+    };
+
+    // Connection state monitoring
+    this.pc.oniceconnectionstatechange = () => {
+      const state = this.pc.iceConnectionState;
+      this._emit('ice-state', state);
+
+      if (state === 'connected' || state === 'completed') {
+        this._clearIceTimeout();
+        this._detectConnectionType();
+      } else if (state === 'failed') {
+        this._clearIceTimeout();
+        this._emit('connection-failed');
+      } else if (state === 'disconnected') {
+        // WebRTC may recover automatically; wait before reporting
+        setTimeout(() => {
+          if (this.pc?.iceConnectionState === 'disconnected') {
+            this._emit('connection-failed');
+          }
+        }, 5000);
+      }
+    };
+
+    this.pc.onconnectionstatechange = () => {
+      this._emit('connection-state', this.pc.connectionState);
+    };
+
+    // Data channel setup
+    if (initiator) {
+      // Sender creates the data channel
+      this.dataChannel = this.pc.createDataChannel('file-transfer', DATA_CHANNEL_CONFIG);
+      this._setupDataChannel(this.dataChannel);
+    } else {
+      // Receiver waits for the data channel
+      this.pc.ondatachannel = (event) => {
+        this.dataChannel = event.channel;
+        this._setupDataChannel(this.dataChannel);
+      };
+    }
+
+    // Start ICE timeout for fallback detection
+    this._startIceTimeout();
+
+    // Apply any buffered ICE candidates
+    for (const candidate of this.iceCandidateBuffer) {
+      await this.pc.addIceCandidate(candidate);
+    }
+    this.iceCandidateBuffer = [];
+  }
+
+  /**
+   * Create an SDP offer (sender).
+   */
+  async createOffer() {
+    const offer = await this.pc.createOffer();
+    await this.pc.setLocalDescription(offer);
+    return this.pc.localDescription;
+  }
+
+  /**
+   * Handle a received SDP offer and create an answer (receiver).
+   */
+  async handleOffer(offer) {
+    await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await this.pc.createAnswer();
+    await this.pc.setLocalDescription(answer);
+    return this.pc.localDescription;
+  }
+
+  /**
+   * Handle a received SDP answer (sender).
+   */
+  async handleAnswer(answer) {
+    await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
+  }
+
+  /**
+   * Add a received ICE candidate.
+   */
+  async addIceCandidate(candidate) {
+    if (!this.pc || !this.pc.remoteDescription) {
+      // Buffer candidates until remote description is set
+      this.iceCandidateBuffer.push(new RTCIceCandidate(candidate));
+      return;
+    }
+    try {
+      await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (err) {
+      console.warn('[WebRTC] Failed to add ICE candidate:', err.message);
+    }
+  }
+
+  /**
+   * Send data through the data channel.
+   */
+  send(data) {
+    if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
+      return false;
+    }
+    this.dataChannel.send(data);
+    return true;
+  }
+
+  /**
+   * Get the current buffered amount.
+   */
+  get bufferedAmount() {
+    return this.dataChannel?.bufferedAmount || 0;
+  }
+
+  /**
+   * Close the connection and clean up.
+   */
+  close() {
+    this._clearIceTimeout();
+    if (this.dataChannel) {
+      this.dataChannel.close();
+      this.dataChannel = null;
+    }
+    if (this.pc) {
+      this.pc.close();
+      this.pc = null;
+    }
+    this.listeners.clear();
+    this.connectionType = null;
+  }
+
+  /**
+   * Register an event listener.
+   */
+  on(event, callback) {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
+    }
+    this.listeners.get(event).add(callback);
+    return () => this.off(event, callback);
+  }
+
+  off(event, callback) {
+    this.listeners.get(event)?.delete(callback);
+  }
+
+  // ── Private Methods ────────────────────────────────────
+
+  _setupDataChannel(channel) {
+    channel.binaryType = 'arraybuffer';
+
+    channel.onopen = () => {
+      this._emit('channel-open');
+    };
+
+    channel.onclose = () => {
+      this._emit('channel-close');
+    };
+
+    channel.onerror = (err) => {
+      console.error('[WebRTC] DataChannel error:', err);
+      this._emit('channel-error', err);
+    };
+
+    channel.onmessage = (event) => {
+      this._emit('data', event.data);
+    };
+
+    channel.onbufferedamountlow = () => {
+      this._emit('buffer-low');
+    };
+  }
+
+  async _getIceConfig() {
+    const config = { ...WEBRTC_CONFIG };
+    
+    // Try to fetch short-lived TURN credentials
+    try {
+      const res = await fetch(TURN_CREDENTIALS_URL, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (res.ok) {
+        const turnData = await res.json();
+        if (turnData.iceServers) {
+          config.iceServers = [
+            ...config.iceServers,
+            ...turnData.iceServers,
+          ];
+        }
+      }
+    } catch (err) {
+      // TURN credentials unavailable — continue with STUN only
+      // P2P will still work for ~80% of connections
+      console.warn('[WebRTC] Could not fetch TURN credentials:', err.message);
+    }
+
+    return config;
+  }
+
+  _startIceTimeout() {
+    this._clearIceTimeout();
+    this.iceTimeout = setTimeout(() => {
+      if (this.pc && 
+          this.pc.iceConnectionState !== 'connected' && 
+          this.pc.iceConnectionState !== 'completed') {
+        console.warn('[WebRTC] ICE timeout — falling back to WS relay');
+        this._emit('fallback-ws');
+      }
+    }, ICE_TIMEOUT_MS);
+  }
+
+  _clearIceTimeout() {
+    if (this.iceTimeout) {
+      clearTimeout(this.iceTimeout);
+      this.iceTimeout = null;
+    }
+  }
+
+  /**
+   * Detect whether we're on a direct P2P or TURN relay connection.
+   * Uses getStats() to inspect the selected candidate pair.
+   */
+  async _detectConnectionType() {
+    if (!this.pc) return;
+    
+    try {
+      const stats = await this.pc.getStats();
+      for (const report of stats.values()) {
+        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+          const localCandidate = stats.get(report.localCandidateId);
+          if (localCandidate) {
+            if (localCandidate.candidateType === 'relay') {
+              this.connectionType = CONNECTION_TYPES.RELAY;
+            } else {
+              this.connectionType = CONNECTION_TYPES.DIRECT;
+            }
+            this._emit('connection-type', this.connectionType);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[WebRTC] Could not detect connection type:', err);
+    }
+    
+    this.connectionType = CONNECTION_TYPES.DIRECT;
+    this._emit('connection-type', this.connectionType);
+  }
+
+  _emit(event, data) {
+    this.listeners.get(event)?.forEach(cb => {
+      try { cb(data); } catch (err) {
+        console.error('[WebRTC] Listener error:', err);
+      }
+    });
+  }
+}

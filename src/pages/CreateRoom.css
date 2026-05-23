@@ -1,0 +1,90 @@
+.create-room-page {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--space-6);
+  animation: fadeInUp 0.4s ease-out;
+}
+
+.page-header {
+  margin-bottom: var(--space-6);
+}
+
+.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-4);
+  transition: color var(--transition-fast);
+  text-decoration: none;
+}
+.page-back:hover { color: var(--text-primary); }
+
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.page-subtitle {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-top: var(--space-2);
+}
+
+.create-section {
+  margin-top: var(--space-6);
+}
+
+.create-section-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-3);
+}
+
+.password-section {
+  margin-top: var(--space-5);
+}
+
+.password-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: var(--space-3);
+}
+
+.password-toggle input[type="checkbox"] {
+  accent-color: var(--accent-primary);
+  width: 16px;
+  height: 16px;
+}
+
+.create-action {
+  margin-top: var(--space-7);
+  text-align: center;
+}
+
+.waiting-section {
+  margin-top: var(--space-8);
+  text-align: center;
+}
+
+.waiting-animation {
+  font-size: 2rem;
+  margin-bottom: var(--space-4);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.waiting-text {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}

@@ -1,0 +1,99 @@
+.dropzone {
+  position: relative;
+  border: 2px dashed var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-10) var(--space-6);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  overflow: hidden;
+}
+
+.dropzone::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--gradient-accent);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  pointer-events: none;
+}
+
+.dropzone:hover,
+.dropzone.drag-over {
+  border-color: var(--accent-primary);
+  background: var(--accent-glow);
+}
+
+.dropzone.drag-over::before {
+  opacity: 0.05;
+}
+
+.dropzone.has-file {
+  border-style: solid;
+  border-color: var(--success);
+  background: var(--success-bg);
+  cursor: default;
+}
+
+.dropzone-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+  display: block;
+}
+
+.dropzone-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.dropzone-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+}
+
+.dropzone-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  justify-content: center;
+}
+
+.dropzone-file-icon {
+  font-size: 2.5rem;
+}
+
+.dropzone-file-info {
+  text-align: left;
+}
+
+.dropzone-file-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 1rem;
+  word-break: break-all;
+}
+
+.dropzone-file-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: var(--space-1);
+}
+
+.dropzone-change {
+  display: inline-block;
+  margin-top: var(--space-4);
+  font-size: 0.85rem;
+  color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.dropzone-change:hover {
+  text-decoration: underline;
+}
+
+.dropzone input[type="file"] {
+  display: none;
+}

@@ -1,0 +1,87 @@
+.approval-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: fadeIn 0.2s ease-out;
+  padding: var(--space-4);
+}
+
+.approval-modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  animation: fadeInUp 0.3s ease-out;
+  box-shadow: var(--shadow-xl);
+}
+
+.approval-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.approval-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+.approval-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-primary);
+  margin-bottom: var(--space-4);
+}
+
+.approval-file-icon {
+  font-size: 2.2rem;
+  flex-shrink: 0;
+}
+
+.approval-file-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-all;
+  font-size: 0.95rem;
+}
+
+.approval-file-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: var(--space-1);
+}
+
+.approval-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--warning-bg);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  font-size: 0.8rem;
+  color: var(--warning);
+  margin-bottom: var(--space-4);
+}
+
+.approval-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.approval-actions .btn { flex: 1; }

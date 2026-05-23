@@ -1,0 +1,19 @@
+name = "flash-signaling"
+main = "src/index.js"
+compatibility_date = "2026-05-23"
+
+# Durable Object bindings
+[durable_objects]
+bindings = [
+  { name = "SIGNALING_ROOM", class_name = "SignalingRoom" }
+]
+
+# Durable Object migrations
+[[migrations]]
+tag = "v1"
+new_classes = ["SignalingRoom"]
+
+# Environment variables (set via wrangler secret or dashboard)
+# [vars]
+# TURN_DOMAIN = "your-turn-server.metered.ca"
+# Use `wrangler secret put TURN_SECRET` for the TURN shared secret

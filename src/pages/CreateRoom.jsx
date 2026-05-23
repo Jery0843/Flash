@@ -25,6 +25,9 @@ export function CreateRoom() {
   const filesRef = useRef(files);
   useEffect(() => { filesRef.current = files; }, [files]);
 
+  const signalingRef = useRef(signaling);
+  useEffect(() => { signalingRef.current = signaling; }, [signaling]);
+
   const manifest = useMemo(() => ({
     files: files.map((f) => ({
       name: f.name,
@@ -59,11 +62,14 @@ export function CreateRoom() {
   }, [signaling.client]);
 
   // When the room is created, spin up the multi-peer sender.
+  // NOTE: we intentionally do NOT put `signaling` in deps because
+  // useSignaling returns a new object on every render, which would
+  // close and recreate the sender on every re-render.
   useEffect(() => {
-    if (!roomCode || senderRef.current) return;
+    if (!roomCode) return;
 
     const sender = new MultiPeerSender({
-      signaling,
+      signaling: signalingRef.current,
       files: filesRef.current,
       manifest,
       onChange: (snapshot) => setPeers(snapshot),
@@ -74,14 +80,14 @@ export function CreateRoom() {
       sender.closeAll();
       senderRef.current = null;
     };
-  }, [roomCode, signaling, manifest]);
+  }, [roomCode, manifest]);
 
   // Tear down signaling on unmount.
   useEffect(() => {
     return () => {
       senderRef.current?.closeAll();
       senderRef.current = null;
-      signaling.disconnect();
+      signalingRef.current?.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

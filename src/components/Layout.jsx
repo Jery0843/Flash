@@ -21,9 +21,10 @@ export function Layout() {
       </main>
       <footer className="layout-footer">
         <div className="layout-footer-inner">
-          <span>Flash — Secure P2P file transfer</span>
+          <span>Flash - Secure P2P file transfer</span>
           <div className="layout-footer-links">
             <span>No storage · No tracking · Encrypted</span>
+            <span>© 0xJerry</span>
           </div>
         </div>
       </footer>

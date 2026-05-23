@@ -1,4 +1,4 @@
-# ⚡ Flash — Secure Browser-to-Browser File Transfer
+# ⚡ Flash - Secure Browser-to-Browser File Transfer
 
 Flash is a production-quality, WebRTC-based instant file sharing platform. Files transfer directly between browsers using encrypted peer-to-peer connections — no uploads, no server storage, no tracking.
 

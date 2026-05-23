@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Flash — Input Sanitization & Validation
+   Flash - Input Sanitization & Validation
    ═══════════════════════════════════════════════════════════ */
 
 import { MAX_FILE_SIZE, DANGEROUS_EXTENSIONS } from './constants';

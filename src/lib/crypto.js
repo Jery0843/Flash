@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Flash — Cryptographic Utilities
+   Flash - Cryptographic Utilities
    ═══════════════════════════════════════════════════════════ */
 
 import { ROOM_CODE_LENGTH, ROOM_CODE_CHARS } from './constants';

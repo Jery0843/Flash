@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Flash — Multi-Peer Sender
+   Flash - Multi-Peer Sender
    Manages N concurrent receivers from a single sender. Each peer
    has its own RTCPeerConnection + FileSender pipeline.
 

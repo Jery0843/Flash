@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Flash — File Transfer Engine (Multi-File)
+   Flash - File Transfer Engine (Multi-File)
    Transport-agnostic chunking, reassembly, and progress.
    Works with both WebRTC DataChannel and WebSocket relay.
    ═══════════════════════════════════════════════════════════ */

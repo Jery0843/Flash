@@ -6,7 +6,7 @@
 export const CHUNK_SIZE = 65536; // 64 KiB — safer cross-browser DataChannel chunk size
 export const BUFFER_HIGH_WATER_MARK = 4 * 1024 * 1024; // Pause sending above 4 MiB buffered
 export const BUFFER_LOW_WATER_MARK = 1024 * 1024; // Resume aggressively once buffered data drains near 1 MiB
-export const MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024; // 4 GB
+export const MAX_FILE_SIZE = 25 * 1024 * 1024 * 1024; // 25 GB
 export const SPEED_WINDOW_MS = 3000; // Rolling 3s window for speed calc
 
 // ── Room Configuration ─────────────────────────────────────

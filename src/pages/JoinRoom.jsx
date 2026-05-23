@@ -76,9 +76,15 @@ export function JoinRoom() {
   }, [code, password, signaling]);
 
   const handleAccept = useCallback(() => {
-    signaling.send(MSG.TRANSFER_ACCEPT);
-    navigate(`/room/${code.toUpperCase().trim()}`, {
-      state: { role: 'receiver', roomCode: code.toUpperCase().trim(), fileMetadata },
+    const roomCode = code.toUpperCase().trim();
+    const sendAccept = () => signaling.send(MSG.TRANSFER_ACCEPT);
+
+    sendAccept();
+    setTimeout(sendAccept, 200);
+    setTimeout(sendAccept, 800);
+
+    navigate(`/room/${roomCode}`, {
+      state: { role: 'receiver', roomCode, fileMetadata },
     });
   }, [signaling, code, fileMetadata, navigate]);
 

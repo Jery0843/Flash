@@ -95,6 +95,7 @@ button, input { font-family: inherit; border: none; outline: none; background: n
   mask-composite: exclude;
   opacity: 0;
   transition: opacity var(--transition-base);
+  pointer-events: none;
 }
 
 .glass-card:hover {

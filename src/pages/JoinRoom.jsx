@@ -59,6 +59,13 @@ export function JoinRoom() {
         setError(data.message || 'Could not join room');
         setJoining(false);
       }),
+      signaling.on(MSG.TRANSFER_CANCEL, () => {
+        // Sender rejected this receiver before transfer began (or cancelled).
+        setError('The sender declined or cancelled your request.');
+        setFileMetadata(null);
+        setRoomStatus(null);
+        signaling.disconnect();
+      }),
       signaling.on('disconnected', () => {
         if (roomStatus && roomStatus !== ROOM_STATES.COMPLETED) {
           setError('Connection to server lost');
@@ -178,6 +185,15 @@ export function JoinRoom() {
         </div>
 
         {error && <div className="join-error">{error}</div>}
+
+        {roomStatus === ROOM_STATES.RECEIVER_JOINED && !fileMetadata && !error && (
+          <div className="join-waiting">
+            <div className="join-waiting-spinner">⏳</div>
+            <div className="join-waiting-text">
+              Connected to room. Waiting for the sender to approve your request…
+            </div>
+          </div>
+        )}
       </div>
 
       {fileMetadata && (

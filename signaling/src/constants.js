@@ -13,6 +13,7 @@ export const MSG = {
   JOIN_ROOM: 'join_room',
   ROOM_JOINED: 'room_joined',
   RECEIVER_JOINED: 'receiver_joined',
+  RECEIVER_LEFT: 'receiver_left',
   ROOM_ERROR: 'room_error',
   FILE_METADATA: 'file_metadata',
   TRANSFER_ACCEPT: 'transfer_accept',

@@ -88,3 +88,34 @@
   font-size: 0.9rem;
   color: var(--text-secondary);
 }
+
+.create-room-page { max-width: 720px; }
+
+.sender-file-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.sender-file-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: 0.85rem;
+}
+
+.sender-file-name {
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sender-file-size {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}

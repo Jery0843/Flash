@@ -1,15 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { FileDropZone } from '../components/FileDropZone';
 import { RoomCodeDisplay } from '../components/RoomCodeDisplay';
 import { StatusIndicator } from '../components/StatusIndicator';
+import { ReceiverList } from '../components/ReceiverList';
 import { useSignaling } from '../hooks/useSignaling';
 import { MSG, ROOM_STATES, CHUNK_SIZE, formatFileSize } from '../lib/constants';
 import { sanitizePassword } from '../lib/sanitize';
+import { MultiPeerSender } from '../lib/multiPeerSender';
 import './CreateRoom.css';
 
 export function CreateRoom() {
-  const navigate = useNavigate();
   const signaling = useSignaling();
   const [files, setFiles] = useState([]);
   const [roomCode, setRoomCode] = useState(null);
@@ -18,57 +19,72 @@ export function CreateRoom() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [peers, setPeers] = useState([]);
 
-  // Listen for signaling events
+  const senderRef = useRef(null);
+  const filesRef = useRef(files);
+  useEffect(() => { filesRef.current = files; }, [files]);
+
+  const manifest = useMemo(() => ({
+    files: files.map((f) => ({
+      name: f.name,
+      size: f.size,
+      type: f.type || 'application/octet-stream',
+      totalChunks: Math.ceil(f.size / CHUNK_SIZE),
+    })),
+    totalFiles: files.length,
+    totalSize: files.reduce((sum, f) => sum + f.size, 0),
+  }), [files]);
+
+  // Listen for signaling lifecycle events (room creation / errors only).
+  // Per-peer events are owned by MultiPeerSender.
   useEffect(() => {
     if (!signaling.client) return;
 
-    const cleanups = [
-      signaling.on(MSG.ROOM_CREATED, (data) => {
-        setRoomCode(data.roomCode);
-        setRoomStatus(ROOM_STATES.WAITING);
-        setCreating(false);
-      }),
-      signaling.on(MSG.RECEIVER_JOINED, () => {
-        setRoomStatus(ROOM_STATES.RECEIVER_JOINED);
-        // Send file manifest to receiver
-        if (files.length > 0) {
-          const manifest = {
-            files: files.map((f) => ({
-              name: f.name,
-              size: f.size,
-              type: f.type || 'application/octet-stream',
-              totalChunks: Math.ceil(f.size / CHUNK_SIZE),
-            })),
-            totalFiles: files.length,
-            totalSize: files.reduce((sum, f) => sum + f.size, 0),
-          };
-          signaling.send(MSG.FILE_METADATA, manifest);
-        }
-      }),
-      signaling.on(MSG.TRANSFER_ACCEPT, () => {
-        // Navigate to transfer room
-        navigate(`/room/${roomCode}`, {
-          state: { role: 'sender', files, roomCode },
-        });
-      }),
-      signaling.on(MSG.TRANSFER_REJECT, () => {
-        setRoomStatus(ROOM_STATES.FAILED);
-        setError('Receiver rejected the transfer');
-      }),
-      signaling.on(MSG.ROOM_ERROR, (data) => {
-        setError(data.message || 'Room error');
-        setCreating(false);
-      }),
-      signaling.on('disconnected', () => {
-        if (roomStatus && roomStatus !== ROOM_STATES.COMPLETED) {
-          setError('Connection to server lost');
-        }
-      }),
-    ];
+    const offCreated = signaling.on(MSG.ROOM_CREATED, (data) => {
+      setRoomCode(data.roomCode);
+      setRoomStatus(ROOM_STATES.WAITING);
+      setCreating(false);
+    });
 
-    return () => cleanups.forEach(fn => fn?.());
-  }, [signaling.client, files, roomCode, roomStatus, navigate]);
+    const offRoomError = signaling.on(MSG.ROOM_ERROR, (data) => {
+      setError(data.message || 'Room error');
+      setCreating(false);
+    });
+
+    return () => {
+      offCreated?.();
+      offRoomError?.();
+    };
+  }, [signaling.client]);
+
+  // When the room is created, spin up the multi-peer sender.
+  useEffect(() => {
+    if (!roomCode || senderRef.current) return;
+
+    const sender = new MultiPeerSender({
+      signaling,
+      files: filesRef.current,
+      manifest,
+      onChange: (snapshot) => setPeers(snapshot),
+    });
+    senderRef.current = sender;
+
+    return () => {
+      sender.closeAll();
+      senderRef.current = null;
+    };
+  }, [roomCode, signaling, manifest]);
+
+  // Tear down signaling on unmount.
+  useEffect(() => {
+    return () => {
+      senderRef.current?.closeAll();
+      senderRef.current = null;
+      signaling.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const createRoom = useCallback(async () => {
     if (files.length === 0) return;
@@ -85,7 +101,24 @@ export function CreateRoom() {
     }
   }, [files, signaling, usePassword, password]);
 
+  const handleApprove = useCallback((peerId) => {
+    senderRef.current?.approve(peerId);
+  }, []);
+
+  const handleReject = useCallback((peerId) => {
+    senderRef.current?.reject(peerId);
+  }, []);
+
+  const handleCancel = useCallback((peerId) => {
+    senderRef.current?.cancel(peerId);
+  }, []);
+
   const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+  const activeCount = peers.filter(
+    (p) => p.status === 'pending-approval' ||
+           p.status === 'connecting' ||
+           p.status === 'transferring',
+  ).length;
 
   return (
     <div className="create-room-page">
@@ -93,11 +126,17 @@ export function CreateRoom() {
         <Link to="/" className="page-back">← Back to home</Link>
         <h1 className="page-title">Send Files</h1>
         <p className="page-subtitle">
-          Select files, create a room, and share the code with your recipient.
+          {roomCode
+            ? 'Share your room code or QR. Multiple receivers can join — approve each one to start sending.'
+            : 'Select files, create a room, and share the code with your recipients.'}
         </p>
       </div>
 
-      {roomStatus && <StatusIndicator status={roomStatus} />}
+      {roomStatus && (
+        <StatusIndicator
+          status={activeCount > 0 ? ROOM_STATES.RECEIVER_JOINED : roomStatus}
+        />
+      )}
 
       {!roomCode && (
         <>
@@ -151,19 +190,31 @@ export function CreateRoom() {
             <RoomCodeDisplay roomCode={roomCode} />
           </div>
 
-          {roomStatus === ROOM_STATES.WAITING && (
-            <div className="waiting-section">
-              <div className="waiting-animation">📡</div>
-              <div className="waiting-text">Waiting for receiver to join...</div>
+          <div className="create-section">
+            <div className="create-section-label">
+              Files to send · {manifest.totalFiles} file{manifest.totalFiles !== 1 ? 's' : ''} · {formatFileSize(manifest.totalSize)}
             </div>
-          )}
+            <div className="sender-file-summary">
+              {files.map((f, i) => (
+                <div key={`${f.name}-${i}`} className="sender-file-row">
+                  <span className="sender-file-name">{f.name}</span>
+                  <span className="sender-file-size">{formatFileSize(f.size)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-          {roomStatus === ROOM_STATES.RECEIVER_JOINED && (
-            <div className="waiting-section">
-              <div className="waiting-animation">🤝</div>
-              <div className="waiting-text">Receiver joined! Waiting for approval...</div>
+          <div className="create-section">
+            <div className="create-section-label">
+              Receivers {peers.length > 0 && `(${peers.length})`}
             </div>
-          )}
+            <ReceiverList
+              peers={peers}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onCancel={handleCancel}
+            />
+          </div>
         </>
       )}
 

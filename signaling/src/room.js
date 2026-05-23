@@ -3,18 +3,51 @@
 //
 // Each room is a separate Durable Object instance.
 // Uses WebSocket Hibernation API for efficient connection management.
-// Room state is ephemeral — destroyed on completion, disconnect, or timeout.
+//
+// Multi-receiver model:
+//   - One sender per room (the room creator)
+//   - N receivers per room, each addressed by a server-generated peerId
+//   - Sender → receiver messages MUST carry payload.targetPeerId; the
+//     server forwards only to the matching receiver socket
+//   - Receiver → sender messages have payload.peerId injected by the
+//     server (clients must not trust client-supplied peerId)
 //
 // Security:
-// - All messages validated before processing
-// - Room password checked on join
-// - Auto-expiry via alarm API (15 minutes)
-// - No file data ever passes through this object (except WS relay fallback)
-// - No permanent storage of any data
+//   - All messages validated before processing
+//   - Room password checked on join
+//   - Auto-expiry via alarm API (15 minutes)
+//   - No file data ever passes through this object (except WS relay fallback)
+//   - No permanent storage of any data
 // ═══════════════════════════════════════════════════════════
 
 import { MSG, ROOM_STATES, ROOM_EXPIRY_MS } from './constants.js';
 import { validateMessage } from './validation.js';
+
+// Messages that flow sender → receiver and require targetPeerId routing.
+const SENDER_TO_RECEIVER = new Set([
+  MSG.FILE_METADATA,
+  MSG.SDP_OFFER,
+  MSG.ICE_CANDIDATE,
+  MSG.TRANSFER_CANCEL,
+  MSG.WS_RELAY_MODE,
+]);
+
+// Messages that flow receiver → sender. Server stamps peerId.
+const RECEIVER_TO_SENDER = new Set([
+  MSG.TRANSFER_ACCEPT,
+  MSG.TRANSFER_REJECT,
+  MSG.SDP_ANSWER,
+  MSG.ICE_CANDIDATE,
+  MSG.TRANSFER_COMPLETE,
+  MSG.TRANSFER_CANCEL,
+]);
+
+function generatePeerId() {
+  // 8-byte hex (16 chars) is plenty for a per-room peer id.
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 export class SignalingRoom {
   constructor(ctx, env) {
@@ -26,20 +59,27 @@ export class SignalingRoom {
       status: null,
       fileMetadata: null,
       createdAt: null,
+      peers: {}, // peerId -> { joinedAt }
     };
-    // Block concurrent requests until persisted state is loaded after
-    // hibernation/eviction. Without this, in-memory state would be lost
-    // across DO restarts (room password & status), allowing receivers to
-    // join password-protected rooms without supplying a password.
+
+    // Hibernation-safe load. Without this, in-memory state would be lost
+    // across DO restarts (room password, peer registry), allowing receivers
+    // to join password-protected rooms without supplying a password.
     this._loaded = ctx.blockConcurrencyWhile(async () => {
       const stored = await ctx.storage.get('roomState');
-      if (stored) this.state = stored;
+      if (stored) {
+        // Backfill new fields on older persisted state.
+        this.state = { peers: {}, ...stored };
+        if (!this.state.peers) this.state.peers = {};
+      }
     });
   }
 
   async _persist() {
     await this.ctx.storage.put('roomState', this.state);
   }
+
+  // ── HTTP / WebSocket Upgrade ──────────────────────────────
 
   async fetch(request) {
     await this._loaded;
@@ -52,95 +92,105 @@ export class SignalingRoom {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
-    // Extract action and params from query
     const action = url.searchParams.get('action');
     const roomCode = url.searchParams.get('code');
     const password = url.searchParams.get('password') || '';
 
-    // Tag the WebSocket with role
-    const tags = [action === 'create' ? 'sender' : 'receiver'];
-    this.ctx.acceptWebSocket(server, tags);
-
     if (action === 'create') {
+      this.ctx.acceptWebSocket(server, ['sender']);
       // Initialize room
       this.state.code = roomCode;
       this.state.password = url.searchParams.get('roomPassword') || null;
       this.state.status = ROOM_STATES.WAITING;
       this.state.createdAt = Date.now();
+      this.state.peers = {};
       await this._persist();
-
-      // Set expiry alarm
       await this.ctx.storage.setAlarm(Date.now() + ROOM_EXPIRY_MS);
 
-      // Send room created confirmation
       server.send(JSON.stringify({
         type: MSG.ROOM_CREATED,
-        payload: {
-          roomCode: this.state.code,
-          token: roomCode, // Simple token in MVP
-        }
+        payload: { roomCode: this.state.code, token: roomCode },
       }));
 
     } else if (action === 'join') {
-      // Check password
+      // Password gate (must run BEFORE we accept the socket so we can reject).
       if (this.state.password && password !== this.state.password) {
+        // Accept then immediately close with an error so the client can read it.
+        this.ctx.acceptWebSocket(server, ['receiver-rejected']);
         server.send(JSON.stringify({
           type: MSG.ROOM_ERROR,
-          payload: { message: 'Incorrect room password' }
+          payload: { message: 'Incorrect room password' },
         }));
         server.close(4001, 'Incorrect password');
         return new Response(null, { status: 101, webSocket: client });
       }
 
-      // Check if room is accepting receivers
-      if (this.state.status !== ROOM_STATES.WAITING) {
+      // Require an active sender. If sender hasn't connected (or has left),
+      // reject the join — otherwise receivers could pile up in a dead room.
+      const senders = this.ctx.getWebSockets('sender');
+      if (senders.length === 0) {
+        this.ctx.acceptWebSocket(server, ['receiver-rejected']);
         server.send(JSON.stringify({
           type: MSG.ROOM_ERROR,
-          payload: { message: 'Room is not accepting new connections' }
+          payload: { message: 'Room is not available' },
         }));
         server.close(4002, 'Room not available');
         return new Response(null, { status: 101, webSocket: client });
       }
 
-      this.state.status = ROOM_STATES.RECEIVER_JOINED;
+      // Allocate a peerId for this receiver and stash it on the WebSocket.
+      const peerId = generatePeerId();
+      this.ctx.acceptWebSocket(server, ['receiver', `peer:${peerId}`]);
+      server.serializeAttachment({ peerId });
+
+      this.state.peers[peerId] = { joinedAt: Date.now() };
       await this._persist();
 
-      // Notify receiver they joined
       server.send(JSON.stringify({
         type: MSG.ROOM_JOINED,
-        payload: {
-          token: roomCode,
-        }
+        payload: { token: roomCode, peerId },
       }));
 
-      // Notify sender that receiver joined
-      const senders = this.ctx.getWebSockets('sender');
-      for (const ws of senders) {
-        ws.send(JSON.stringify({
-          type: MSG.RECEIVER_JOINED,
-          payload: {}
-        }));
+      // Notify sender(s) that a new receiver joined.
+      for (const s of senders) {
+        try {
+          s.send(JSON.stringify({
+            type: MSG.RECEIVER_JOINED,
+            payload: { peerId },
+          }));
+        } catch { /* socket may be closed */ }
       }
+    } else {
+      return new Response('Invalid action', { status: 400 });
     }
 
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  // ── WebSocket Lifecycle ───────────────────────────────────
+
   async webSocketMessage(ws, message) {
     await this._loaded;
-    // Handle binary messages (WS relay)
+
+    // Binary frames are WS relay fallback chunks.
     if (message instanceof ArrayBuffer) {
+      // NOTE: Binary WS relay is not peer-routed in multi-receiver mode.
+      // It will work correctly with exactly one receiver. With >1 receiver
+      // in WS relay mode, chunks would be broadcast to all (mixing streams).
       this._broadcastBinary(ws, message);
       return;
     }
 
     const result = validateMessage(message);
     if (!result.valid) {
-      ws.send(JSON.stringify({ type: MSG.ROOM_ERROR, message: result.error }));
+      ws.send(JSON.stringify({ type: MSG.ROOM_ERROR, payload: { message: result.error } }));
       return;
     }
 
     const { type, payload } = result;
+    const tags = this.ctx.getTags(ws);
+    const isSender = tags?.includes('sender');
+    const isReceiver = tags?.includes('receiver');
 
     switch (type) {
       case MSG.PING:
@@ -148,110 +198,131 @@ export class SignalingRoom {
         break;
 
       case MSG.FILE_METADATA:
-        this.state.fileMetadata = {
-          name: payload.name,
-          size: payload.size,
-          type: payload.type,
-          totalChunks: payload.totalChunks,
-        };
+        if (!isSender) break;
+        // Cache the manifest so we could re-send to late joiners if needed.
+        this.state.fileMetadata = payload;
         await this._persist();
-        this._broadcastToOther(ws, message);
+        this._routeToReceiver(payload?.targetPeerId, message);
         break;
 
       case MSG.SDP_OFFER:
-      case MSG.SDP_ANSWER:
       case MSG.ICE_CANDIDATE:
-        this.state.status = ROOM_STATES.NEGOTIATING;
-        await this._persist();
-        this._broadcastToOther(ws, message);
+      case MSG.TRANSFER_CANCEL:
+      case MSG.WS_RELAY_MODE:
+        if (isSender && SENDER_TO_RECEIVER.has(type)) {
+          this._routeToReceiver(payload?.targetPeerId, message);
+        } else if (isReceiver && RECEIVER_TO_SENDER.has(type)) {
+          this._forwardToSenderWithPeerId(ws, type, payload);
+        }
         break;
 
+      case MSG.SDP_ANSWER:
       case MSG.TRANSFER_ACCEPT:
       case MSG.TRANSFER_REJECT:
-        this._broadcastToOther(ws, message);
-        break;
-
       case MSG.TRANSFER_COMPLETE:
-        this.state.status = ROOM_STATES.COMPLETED;
-        this._broadcastToOther(ws, message);
-        // Clean up after short delay
-        setTimeout(() => this._cleanup(), 5000);
+        if (!isReceiver) break;
+        this._forwardToSenderWithPeerId(ws, type, payload);
+        if (type === MSG.TRANSFER_COMPLETE) {
+          this.state.status = ROOM_STATES.COMPLETED;
+          await this._persist();
+        } else if (type === MSG.SDP_ANSWER) {
+          this.state.status = ROOM_STATES.NEGOTIATING;
+          await this._persist();
+        }
         break;
 
-      case MSG.TRANSFER_CANCEL:
-        this.state.status = ROOM_STATES.FAILED;
-        this._broadcastToOther(ws, message);
-        this._cleanup();
-        break;
-
-      case MSG.WS_RELAY_MODE:
       case MSG.WS_RELAY_CHUNK:
-        // Forward relay data to the other peer
+        // Forward relay data to the other side (1:1 only — see note above).
         this._broadcastToOther(ws, message);
         break;
 
       default:
-        // Unknown type already caught by validation, but be safe
+        // Unknown types already rejected by validation.
         break;
     }
 
-    // Reset expiry on activity
+    // Reset expiry on activity.
     await this.ctx.storage.setAlarm(Date.now() + ROOM_EXPIRY_MS);
   }
 
   async webSocketClose(ws, code, reason, wasClean) {
     await this._loaded;
-    // If sender disconnects, destroy room
     const tags = this.ctx.getTags(ws);
+
     if (tags?.includes('sender')) {
+      // Sender left — tear the whole room down.
       this._broadcastAll(JSON.stringify({
         type: MSG.ROOM_ERROR,
-        payload: { message: 'Sender disconnected' }
+        payload: { message: 'Sender disconnected' },
       }));
       this._cleanup();
-    } else if (tags?.includes('receiver')) {
-      // Notify sender
+      return;
+    }
+
+    if (tags?.includes('receiver')) {
+      const att = ws.deserializeAttachment?.();
+      const peerId = att?.peerId;
+      if (peerId && this.state.peers?.[peerId]) {
+        delete this.state.peers[peerId];
+        await this._persist();
+      }
+      // Notify sender(s) that this peer left.
       const senders = this.ctx.getWebSockets('sender');
       for (const s of senders) {
-        s.send(JSON.stringify({
-          type: MSG.ROOM_ERROR,
-          payload: { message: 'Receiver disconnected' }
-        }));
+        try {
+          s.send(JSON.stringify({
+            type: MSG.RECEIVER_LEFT,
+            payload: { peerId },
+          }));
+        } catch { /* ignore */ }
       }
-      this.state.status = ROOM_STATES.WAITING;
-      await this._persist();
     }
   }
 
   async webSocketError(ws, error) {
     console.error('[SignalingRoom] WebSocket error:', error);
-    ws.close(1011, 'Internal error');
+    try { ws.close(1011, 'Internal error'); } catch { /* ignore */ }
   }
 
   async alarm() {
     await this._loaded;
-    // Room expired
     this.state.status = ROOM_STATES.EXPIRED;
     this._broadcastAll(JSON.stringify({
       type: MSG.ROOM_ERROR,
-      payload: { message: 'Room expired due to inactivity' }
+      payload: { message: 'Room expired due to inactivity' },
     }));
     this._cleanup();
   }
 
-  // ── Private Helpers ──────────────────────────────────
+  // ── Routing Helpers ───────────────────────────────────────
+
+  _routeToReceiver(targetPeerId, message) {
+    if (!targetPeerId) return; // require explicit targeting from sender
+    const sockets = this.ctx.getWebSockets(`peer:${targetPeerId}`);
+    for (const ws of sockets) {
+      try { ws.send(message); } catch { /* ignore */ }
+    }
+  }
+
+  _forwardToSenderWithPeerId(receiverWs, type, payload) {
+    const att = receiverWs.deserializeAttachment?.();
+    const peerId = att?.peerId;
+    if (!peerId) return;
+    const stamped = JSON.stringify({
+      type,
+      payload: { ...payload, peerId },
+    });
+    const senders = this.ctx.getWebSockets('sender');
+    for (const s of senders) {
+      try { s.send(stamped); } catch { /* ignore */ }
+    }
+  }
 
   _broadcastToOther(sender, message) {
     const allSockets = this.ctx.getWebSockets();
     for (const ws of allSockets) {
       if (ws !== sender) {
-        try {
-          if (message instanceof ArrayBuffer) {
-            ws.send(message);
-          } else {
-            ws.send(message);
-          }
-        } catch { /* Socket may be closed */ }
+        try { ws.send(message); } catch { /* ignore */ }
       }
     }
   }
@@ -283,8 +354,8 @@ export class SignalingRoom {
       status: null,
       fileMetadata: null,
       createdAt: null,
+      peers: {},
     };
-    // Best-effort wipe of persisted state; ignore errors during teardown.
     try { this.ctx.storage.deleteAll(); } catch { /* ignore */ }
   }
 }

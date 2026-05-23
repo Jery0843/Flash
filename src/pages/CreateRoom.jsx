@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Lock, Unlock, Zap, FileText, Users, Shield } from 'lucide-react';
 import { FileDropZone } from '../components/FileDropZone';
 import { RoomCodeDisplay } from '../components/RoomCodeDisplay';
 import { StatusIndicator } from '../components/StatusIndicator';
@@ -127,116 +129,259 @@ export function CreateRoom() {
   ).length;
 
   return (
-    <div className="create-room-page">
-      <div className="page-header">
-        <Link to="/" className="page-back">← Back to home</Link>
-        <h1 className="page-title">Send Files</h1>
+    <motion.div 
+      className="create-room-page"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <motion.div 
+        className="page-header"
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+      >
+        <Link to="/" className="page-back">
+          <motion.div 
+            className="back-button"
+            whileHover={{ x: -4 }}
+            whileTap={{ x: 0 }}
+          >
+            <ArrowLeft size={20} />
+            <span>Back to home</span>
+          </motion.div>
+        </Link>
+        <h1 className="page-title">
+          <motion.span
+            animate={{ 
+              background: ['linear-gradient(135deg, #38bdf8, #818cf8)', 'linear-gradient(135deg, #818cf8, #c084fc)', 'linear-gradient(135deg, #38bdf8, #818cf8)']
+            }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+            style={{ backgroundSize: '200% 200%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+          >
+            Send Files
+          </motion.span>
+        </h1>
         <p className="page-subtitle">
           {roomCode
             ? 'Share your room code or QR. Multiple receivers can join — approve each one to start sending.'
             : 'Select files, create a room, and share the code with your recipients.'}
         </p>
-      </div>
+      </motion.div>
 
-      {roomStatus && (
-        <StatusIndicator
-          status={activeCount > 0 ? ROOM_STATES.RECEIVER_JOINED : roomStatus}
-        />
-      )}
-
-      {!roomCode && (
-        <>
-          <div className="create-section">
-            <div className="create-section-label">Select files</div>
-            <FileDropZone onFilesSelect={setFiles} selectedFiles={files} disabled={creating} />
-          </div>
-
-          <div className="password-section">
-            <label className="password-toggle">
-              <input
-                type="checkbox"
-                checked={usePassword}
-                onChange={(e) => setUsePassword(e.target.checked)}
-                disabled={creating}
-              />
-              <span>Add room password (optional)</span>
-            </label>
-            {usePassword && (
-              <input
-                className="input-field"
-                type="password"
-                placeholder="Enter a room password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                maxLength={128}
-                disabled={creating}
-                id="room-password-input"
-              />
-            )}
-          </div>
-
-          <div className="create-action">
-            <button
-              className="btn btn-primary btn-lg"
-              onClick={createRoom}
-              disabled={files.length === 0 || creating}
-              id="create-room-btn"
-            >
-              {creating
-                ? '⏳ Creating...'
-                : `⚡ Create Room${files.length > 0 ? ` (${files.length} file${files.length !== 1 ? 's' : ''} · ${formatFileSize(totalSize)})` : ''}`}
-            </button>
-          </div>
-        </>
-      )}
-
-      {roomCode && (
-        <>
-          <div className="create-section" style={{ marginTop: 'var(--space-6)' }}>
-            <RoomCodeDisplay roomCode={roomCode} />
-          </div>
-
-          <div className="create-section">
-            <div className="create-section-label">
-              Files to send · {manifest.totalFiles} file{manifest.totalFiles !== 1 ? 's' : ''} · {formatFileSize(manifest.totalSize)}
-            </div>
-            <div className="sender-file-summary">
-              {files.map((f, i) => (
-                <div key={`${f.name}-${i}`} className="sender-file-row">
-                  <span className="sender-file-name">{f.name}</span>
-                  <span className="sender-file-size">{formatFileSize(f.size)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="create-section">
-            <div className="create-section-label">
-              Receivers {peers.length > 0 && `(${peers.length})`}
-            </div>
-            <ReceiverList
-              peers={peers}
-              onApprove={handleApprove}
-              onReject={handleReject}
-              onCancel={handleCancel}
+      <AnimatePresence>
+        {roomStatus && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+          >
+            <StatusIndicator
+              status={activeCount > 0 ? ROOM_STATES.RECEIVER_JOINED : roomStatus}
             />
-          </div>
-        </>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {error && (
-        <div style={{
-          marginTop: 'var(--space-4)',
-          padding: 'var(--space-3) var(--space-4)',
-          background: 'var(--error-bg)',
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid rgba(248,113,113,0.2)',
-          color: 'var(--error)',
-          fontSize: '0.85rem',
-        }}>
-          {error}
-        </div>
-      )}
-    </div>
+      <AnimatePresence mode="wait">
+        {!roomCode ? (
+          <motion.div
+            key="setup"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <motion.div 
+              className="create-section"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.3 }}
+            >
+              <div className="create-section-label">
+                <FileText size={18} className="inline mr-2" />
+                Select files
+              </div>
+              <FileDropZone onFilesSelect={setFiles} selectedFiles={files} disabled={creating} />
+            </motion.div>
+
+            <motion.div 
+              className="password-section"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.3 }}
+            >
+              <label className="password-toggle">
+                <motion.input
+                  type="checkbox"
+                  checked={usePassword}
+                  onChange={(e) => setUsePassword(e.target.checked)}
+                  disabled={creating}
+                  className="password-checkbox"
+                  whileTap={{ scale: 0.9 }}
+                />
+                <motion.span 
+                  className="password-text"
+                  animate={{ color: usePassword ? 'var(--accent-primary)' : 'var(--text-secondary)' }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {usePassword ? <Lock size={16} className="inline mr-2" /> : <Unlock size={16} className="inline mr-2" />}
+                  Add room password (optional)
+                </motion.span>
+              </label>
+              <AnimatePresence>
+                {usePassword && (
+                  <motion.input
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="input-field"
+                    type="password"
+                    placeholder="Enter a room password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    maxLength={128}
+                    disabled={creating}
+                    id="room-password-input"
+                  />
+                )}
+              </AnimatePresence>
+            </motion.div>
+
+            <motion.div 
+              className="create-action"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.3 }}
+            >
+              <motion.button
+                className="btn btn-primary btn-lg"
+                onClick={createRoom}
+                disabled={files.length === 0 || creating}
+                id="create-room-btn"
+                whileHover={{ scale: 1.02, boxShadow: '0 0 40px var(--accent-glow)' }}
+                whileTap={{ scale: 0.98 }}
+                animate={creating ? { scale: [1, 0.98, 1] } : {}}
+                transition={creating ? { duration: 1, repeat: Infinity } : {}}
+              >
+                {creating ? (
+                  <>
+                    <motion.div 
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      style={{ display: 'inline-block', marginRight: '8px' }}
+                    >
+                      <Zap size={20} />
+                    </motion.div>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Zap size={20} className="mr-2" />
+                    Create Room{files.length > 0 && ` (${files.length} file${files.length !== 1 ? 's' : ''} · ${formatFileSize(totalSize)})`}
+                  </>
+                )}
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        {roomCode && (
+          <motion.div
+            key="dashboard"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <motion.div 
+              className="create-section" 
+              style={{ marginTop: 'var(--space-6)' }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.1, duration: 0.3 }}
+            >
+              <RoomCodeDisplay roomCode={roomCode} />
+            </motion.div>
+
+            <motion.div 
+              className="create-section"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.3 }}
+            >
+              <div className="create-section-label">
+                <FileText size={18} className="inline mr-2" />
+                Files to send · {manifest.totalFiles} file{manifest.totalFiles !== 1 ? 's' : ''} · {formatFileSize(manifest.totalSize)}
+              </div>
+              <motion.div 
+                className="sender-file-summary"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3, duration: 0.3 }}
+              >
+                {files.map((f, i) => (
+                  <motion.div 
+                    key={`${f.name}-${i}`} 
+                    className="sender-file-row"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 + (i * 0.05), duration: 0.25 }}
+                  >
+                    <span className="sender-file-name">{f.name}</span>
+                    <span className="sender-file-size">{formatFileSize(f.size)}</span>
+                  </motion.div>
+                ))}
+              </motion.div>
+            </motion.div>
+
+            <motion.div 
+              className="create-section"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4, duration: 0.3 }}
+            >
+              <div className="create-section-label">
+                <Users size={18} className="inline mr-2" />
+                Receivers {peers.length > 0 && (
+                  <motion.span 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="receiver-count"
+                  >
+                    ({peers.length})
+                  </motion.span>
+                )}
+              </div>
+              <ReceiverList
+                peers={peers}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                onCancel={handleCancel}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="error-message"
+          >
+            <Shield size={16} className="inline mr-2" />
+            {error}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

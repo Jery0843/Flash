@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Upload, Download, CheckCircle, XCircle, Pause, Play, ArrowLeft, FolderOpen, FileText, Wifi, WifiOff, AlertCircle } from 'lucide-react';
 import { StatusIndicator } from '../components/StatusIndicator';
 import { TransferProgress } from '../components/TransferProgress';
 import { TransferStats } from '../components/TransferStats';
@@ -159,171 +161,370 @@ export function TransferRoom() {
   if (!location.state) return null;
 
   return (
-    <div className="transfer-room-page">
-      <div className="transfer-header">
+    <motion.div 
+      className="transfer-room-page"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <motion.div 
+        className="transfer-header"
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+      >
         <div className="transfer-header-left">
-          <h1>{isSender ? 'Sending Files' : 'Receiving Files'}</h1>
+          <motion.h1
+            animate={{ 
+              background: ['linear-gradient(135deg, #38bdf8, #818cf8)', 'linear-gradient(135deg, #818cf8, #c084fc)', 'linear-gradient(135deg, #38bdf8, #818cf8)']
+            }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+            style={{ backgroundSize: '200% 200%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+          >
+            {isSender ? 'Sending Files' : 'Receiving Files'}
+          </motion.h1>
         </div>
         <StatusIndicator status={displayRoomStatus} />
-      </div>
+      </motion.div>
 
-      {/* File info card */}
-      {currentFile && manifest && (
-        <div className="transfer-file-card glass-card">
-          <div className="transfer-file-header">
-            <span className="transfer-file-icon">
-              {manifest.totalFiles > 1 ? '🗂️' : getFileIcon(currentFile.type, currentFile.name)}
-            </span>
-            <div>
-              <div className="transfer-file-name">
-                {currentFile.name}
-                {manifest.totalFiles > 1 && (
-                  <span className="transfer-file-counter">
-                    {' '}({(fileTransfer.currentFileIndex ?? 0) + 1}/{manifest.totalFiles})
-                  </span>
-                )}
-              </div>
-              <div className="transfer-file-meta">
-                {formatFileSize(currentFile.size)} · {currentFile.type || 'Unknown'}
-              </div>
-              {manifest.totalFiles > 1 && (
-                <div className="transfer-file-meta">
-                  {manifest.totalFiles} files · {formatFileSize(manifest.totalSize)} total
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Negotiating state */}
-      {(displayRoomStatus === ROOM_STATES.NEGOTIATING || displayRoomStatus === ROOM_STATES.RELAY_FALLBACK) && !error && (
-        <div className="negotiating-section">
-          <div className="negotiating-spinner" />
-          <div className="negotiating-text">
-            {displayRoomStatus === ROOM_STATES.RELAY_FALLBACK
-              ? 'Trying relay connection...'
-              : 'Establishing secure connection...'}
-          </div>
-        </div>
-      )}
-
-      {/* Transfer in progress */}
-      {(displayRoomStatus === ROOM_STATES.TRANSFERRING || displayRoomStatus === ROOM_STATES.CONNECTED) && (
-        <div className="transfer-progress-section">
-          <TransferProgress stats={fileTransfer.stats} />
-          <TransferStats stats={fileTransfer.stats} connectionType={webrtc.connectionType} />
-
-          <div className="transfer-controls">
-            {isSender && fileTransfer.transferState === 'sending' && (
-              <button className="btn btn-secondary" onClick={handlePause} id="pause-btn">
-                ⏸ Pause
-              </button>
-            )}
-            {fileTransfer.transferState === 'paused' && (
-              <button className="btn btn-primary" onClick={handleResume} id="resume-btn">
-                ▶ Resume
-              </button>
-            )}
-            <button className="btn btn-danger" onClick={handleCancel} id="cancel-btn">
-              ✕ Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Transfer complete */}
-      {displayRoomStatus === ROOM_STATES.COMPLETED && (
-        <div className="transfer-complete">
-          <div className="transfer-complete-icon">✅</div>
-          <div className="transfer-complete-title">Transfer Complete!</div>
-          <div className="transfer-complete-subtitle">
-            {isSender
-              ? `${manifest?.totalFiles || 1} file${(manifest?.totalFiles || 1) !== 1 ? 's' : ''} sent successfully.`
-              : `${fileTransfer.receivedFiles.length} file${fileTransfer.receivedFiles.length !== 1 ? 's' : ''} received successfully.`}
-          </div>
-
-          {/* Preview + Download for receiver */}
-          {!isSender && fileTransfer.receivedFiles.length > 0 && (
-            <>
-              {/* Show preview for last received file */}
-              <FilePreview
-                blob={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].blob}
-                name={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].name}
-                type={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].type}
-              />
-              <div className="transfer-download-actions">
-                {fileTransfer.receivedFiles.length === 1 ? (
-                  <button
-                    className="btn btn-primary btn-lg"
-                    onClick={() => fileTransfer.download(0)}
-                    id="download-btn"
-                  >
-                    📥 Download File
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      className="btn btn-primary btn-lg"
-                      onClick={fileTransfer.downloadAll}
-                      id="download-all-btn"
+      <AnimatePresence>
+        {currentFile && manifest && (
+          <motion.div 
+            className="transfer-file-card glass-card"
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ delay: 0.1, duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <div className="transfer-file-header">
+              <motion.span 
+                className="transfer-file-icon"
+                animate={{ rotate: [0, 5, -5, 0] }}
+                transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+              >
+                {manifest.totalFiles > 1 ? <FolderOpen size={32} className="text-cyan-400" /> : <FileText size={32} className="text-cyan-400" />}
+              </motion.span>
+              <div>
+                <div className="transfer-file-name">
+                  {currentFile.name}
+                  {manifest.totalFiles > 1 && (
+                    <motion.span 
+                      className="transfer-file-counter"
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ delay: 0.2 }}
                     >
-                      📥 Download All ({fileTransfer.receivedFiles.length} files)
-                    </button>
-                  </>
+                      {' '}({(fileTransfer.currentFileIndex ?? 0) + 1}/{manifest.totalFiles})
+                    </motion.span>
+                  )}
+                </div>
+                <div className="transfer-file-meta">
+                  {formatFileSize(currentFile.size)} · {currentFile.type || 'Unknown'}
+                </div>
+                {manifest.totalFiles > 1 && (
+                  <div className="transfer-file-meta">
+                    {manifest.totalFiles} files · {formatFileSize(manifest.totalSize)} total
+                  </div>
                 )}
               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-              {/* Individual file list for multi-file */}
-              {fileTransfer.receivedFiles.length > 1 && (
-                <div className="transfer-received-list">
-                  {fileTransfer.receivedFiles.map((file, i) => (
-                    <div className="transfer-received-item" key={`${file.name}-${i}`}>
-                      <span className="transfer-received-icon">{getFileIcon(file.type, file.name)}</span>
-                      <div className="transfer-received-info">
-                        <div className="transfer-received-name">{file.name}</div>
-                        <div className="transfer-received-meta">{formatFileSize(file.size)}</div>
-                      </div>
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => fileTransfer.download(i)}
+      <AnimatePresence>
+        {(displayRoomStatus === ROOM_STATES.NEGOTIATING || displayRoomStatus === ROOM_STATES.RELAY_FALLBACK) && !error && (
+          <motion.div 
+            className="negotiating-section"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.4 }}
+          >
+            <motion.div 
+              className="negotiating-spinner"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+            >
+              <Wifi size={48} className="text-cyan-400" />
+            </motion.div>
+            <motion.div 
+              className="negotiating-text"
+              animate={{ 
+                opacity: [0.6, 1, 0.6],
+                y: [0, -5, 0]
+              }}
+              transition={{ duration: 2, repeat: Infinity }}
+            >
+              {displayRoomStatus === ROOM_STATES.RELAY_FALLBACK
+                ? 'Trying relay connection...'
+                : 'Establishing secure connection...'}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {(displayRoomStatus === ROOM_STATES.TRANSFERRING || displayRoomStatus === ROOM_STATES.CONNECTED) && (
+          <motion.div 
+            className="transfer-progress-section"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <TransferProgress stats={fileTransfer.stats} />
+            <TransferStats stats={fileTransfer.stats} connectionType={webrtc.connectionType} />
+
+            <motion.div 
+              className="transfer-controls"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.3 }}
+            >
+              <AnimatePresence mode="wait">
+                {isSender && fileTransfer.transferState === 'sending' && (
+                  <motion.button
+                    key="pause"
+                    className="btn btn-secondary"
+                    onClick={handlePause}
+                    id="pause-btn"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Pause size={18} className="mr-2" />
+                    Pause
+                  </motion.button>
+                )}
+                {fileTransfer.transferState === 'paused' && (
+                  <motion.button
+                    key="resume"
+                    className="btn btn-primary"
+                    onClick={handleResume}
+                    id="resume-btn"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    whileHover={{ scale: 1.05, boxShadow: '0 0 30px var(--accent-glow)' }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Play size={18} className="mr-2" />
+                    Resume
+                  </motion.button>
+                )}
+              </AnimatePresence>
+              <motion.button 
+                className="btn btn-danger" 
+                onClick={handleCancel} 
+                id="cancel-btn"
+                whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(248, 113, 113, 0.3)' }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <XCircle size={18} className="mr-2" />
+                Cancel
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {displayRoomStatus === ROOM_STATES.COMPLETED && (
+          <motion.div 
+            className="transfer-complete"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <motion.div 
+              className="transfer-complete-icon"
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ delay: 0.2, duration: 0.5, type: 'spring' }}
+            >
+              <CheckCircle size={64} className="text-green-400" />
+            </motion.div>
+            <motion.div 
+              className="transfer-complete-title"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.4 }}
+            >
+              Transfer Complete!
+            </motion.div>
+            <motion.div 
+              className="transfer-complete-subtitle"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.4, duration: 0.4 }}
+            >
+              {isSender
+                ? `${manifest?.totalFiles || 1} file${(manifest?.totalFiles || 1) !== 1 ? 's' : ''} sent successfully.`
+                : `${fileTransfer.receivedFiles.length} file${fileTransfer.receivedFiles.length !== 1 ? 's' : ''} received successfully.`}
+            </motion.div>
+
+            <AnimatePresence>
+              {!isSender && fileTransfer.receivedFiles.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5, duration: 0.4 }}
+                >
+                  <FilePreview
+                    blob={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].blob}
+                    name={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].name}
+                    type={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].type}
+                  />
+                  <motion.div 
+                    className="transfer-download-actions"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6, duration: 0.3 }}
+                  >
+                    <AnimatePresence mode="wait">
+                      {fileTransfer.receivedFiles.length === 1 ? (
+                        <motion.button
+                          key="single"
+                          className="btn btn-primary btn-lg"
+                          onClick={() => fileTransfer.download(0)}
+                          id="download-btn"
+                          whileHover={{ scale: 1.05, boxShadow: '0 0 40px var(--accent-glow)' }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <Download size={20} className="mr-2" />
+                          Download File
+                        </motion.button>
+                      ) : (
+                        <motion.button
+                          key="all"
+                          className="btn btn-primary btn-lg"
+                          onClick={fileTransfer.downloadAll}
+                          id="download-all-btn"
+                          whileHover={{ scale: 1.05, boxShadow: '0 0 40px var(--accent-glow)' }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <Download size={20} className="mr-2" />
+                          Download All ({fileTransfer.receivedFiles.length} files)
+                        </motion.button>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+
+                  <AnimatePresence>
+                    {fileTransfer.receivedFiles.length > 1 && (
+                      <motion.div 
+                        className="transfer-received-list"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.7, duration: 0.3 }}
                       >
-                        📥
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                        {fileTransfer.receivedFiles.map((file, i) => (
+                          <motion.div 
+                            className="transfer-received-item" 
+                            key={`${file.name}-${i}`}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.7 + (i * 0.05), duration: 0.25 }}
+                          >
+                            <span className="transfer-received-icon">{getFileIcon(file.type, file.name)}</span>
+                            <div className="transfer-received-info">
+                              <div className="transfer-received-name">{file.name}</div>
+                              <div className="transfer-received-meta">{formatFileSize(file.size)}</div>
+                            </div>
+                            <motion.button
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => fileTransfer.download(i)}
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                            >
+                              <Download size={16} />
+                            </motion.button>
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
               )}
-            </>
-          )}
+            </AnimatePresence>
 
-          <TransferStats stats={fileTransfer.stats} connectionType={webrtc.connectionType} />
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.8, duration: 0.3 }}
+            >
+              <TransferStats stats={fileTransfer.stats} connectionType={webrtc.connectionType} />
+            </motion.div>
 
-          <div style={{ marginTop: 'var(--space-6)' }}>
-            <Link to="/" className="btn btn-secondary" id="back-home-btn">
-              ← Back to Home
-            </Link>
-          </div>
-        </div>
-      )}
+            <motion.div 
+              style={{ marginTop: 'var(--space-6)' }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.9, duration: 0.3 }}
+            >
+              <Link to="/" className="btn btn-secondary" id="back-home-btn">
+                <ArrowLeft size={18} className="mr-2" />
+                Back to Home
+              </Link>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Error / Failed state */}
-      {(displayRoomStatus === ROOM_STATES.FAILED || displayRoomStatus === ROOM_STATES.CANCELLED) && (
-        <div className="transfer-failed">
-          <div className="transfer-failed-icon">
-            {displayRoomStatus === ROOM_STATES.CANCELLED ? '🚫' : '❌'}
-          </div>
-          <div className="transfer-failed-title">
-            {displayRoomStatus === ROOM_STATES.CANCELLED ? 'Transfer Cancelled' : 'Transfer Failed'}
-          </div>
-          <div className="transfer-failed-message">
-            {error || 'Something went wrong during the transfer.'}
-          </div>
-          <Link to="/" className="btn btn-secondary" id="back-home-error-btn">
-            ← Back to Home
-          </Link>
-        </div>
-      )}
-    </div>
+      <AnimatePresence>
+        {(displayRoomStatus === ROOM_STATES.FAILED || displayRoomStatus === ROOM_STATES.CANCELLED) && (
+          <motion.div 
+            className="transfer-failed"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ duration: 0.4 }}
+          >
+            <motion.div 
+              className="transfer-failed-icon"
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ duration: 0.5, type: 'spring' }}
+            >
+              {displayRoomStatus === ROOM_STATES.CANCELLED ? (
+                <XCircle size={64} className="text-gray-400" />
+              ) : (
+                <AlertCircle size={64} className="text-red-400" />
+              )}
+            </motion.div>
+            <motion.div 
+              className="transfer-failed-title"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.4 }}
+            >
+              {displayRoomStatus === ROOM_STATES.CANCELLED ? 'Transfer Cancelled' : 'Transfer Failed'}
+            </motion.div>
+            <motion.div 
+              className="transfer-failed-message"
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.4 }}
+            >
+              {error || 'Something went wrong during the transfer.'}
+            </motion.div>
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.4, duration: 0.4 }}
+            >
+              <Link to="/" className="btn btn-secondary" id="back-home-error-btn">
+                <ArrowLeft size={18} className="mr-2" />
+                Back to Home
+              </Link>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowLeft, Download, Lock, Clock, Loader2, AlertCircle, Key } from 'lucide-react';
 import { useSignaling } from '../hooks/useSignaling';
 import { ApprovalModal } from '../components/ApprovalModal';
 import { StatusIndicator } from '../components/StatusIndicator';
@@ -130,20 +132,66 @@ export function JoinRoom() {
   };
 
   return (
-    <div className="join-room-page">
-      <div className="page-header">
-        <Link to="/" className="page-back">← Back to home</Link>
-        <h1 className="page-title">Receive Files</h1>
+    <motion.div 
+      className="join-room-page"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      <motion.div 
+        className="page-header"
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+      >
+        <Link to="/" className="page-back">
+          <motion.div 
+            className="back-button"
+            whileHover={{ x: -4 }}
+            whileTap={{ x: 0 }}
+          >
+            <ArrowLeft size={20} />
+            <span>Back to home</span>
+          </motion.div>
+        </Link>
+        <h1 className="page-title">
+          <motion.span
+            animate={{ 
+              background: ['linear-gradient(135deg, #38bdf8, #818cf8)', 'linear-gradient(135deg, #818cf8, #c084fc)', 'linear-gradient(135deg, #38bdf8, #818cf8)']
+            }}
+            transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+            style={{ backgroundSize: '200% 200%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+          >
+            Receive Files
+          </motion.span>
+        </h1>
         <p className="page-subtitle">
           Enter the room code shared by the sender to receive files.
         </p>
-      </div>
+      </motion.div>
 
-      {roomStatus && <StatusIndicator status={roomStatus} />}
+      <AnimatePresence>
+        {roomStatus && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.3 }}
+          >
+            <StatusIndicator status={roomStatus} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div className="join-code-section">
+      <motion.div 
+        className="join-code-section"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+      >
         <div className="join-code-input-wrapper">
-          <input
+          <motion.input
             className="join-code-input"
             type="text"
             value={code}
@@ -154,55 +202,132 @@ export function JoinRoom() {
             autoFocus
             disabled={joining || roomStatus === ROOM_STATES.RECEIVER_JOINED}
             id="join-code-input"
+            whileFocus={{ scale: 1.02, boxShadow: '0 0 30px var(--accent-glow)' }}
+            transition={{ duration: 0.2 }}
           />
         </div>
 
-        {needsPassword && (
-          <div className="join-password-section">
-            <div className="join-password-label">This room requires a password</div>
-            <input
-              className="input-field"
-              type="password"
-              placeholder="Enter room password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              maxLength={128}
-              disabled={joining}
-              id="join-password-input"
-            />
-          </div>
-        )}
+        <AnimatePresence>
+          {needsPassword && (
+            <motion.div 
+              className="join-password-section"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="join-password-label">
+                <Key size={16} className="inline mr-2" />
+                This room requires a password
+              </div>
+              <motion.input
+                className="input-field"
+                type="password"
+                placeholder="Enter room password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                maxLength={128}
+                disabled={joining}
+                id="join-password-input"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.1 }}
+                whileFocus={{ boxShadow: '0 0 30px var(--accent-glow)' }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <div className="join-action">
-          <button
+        <motion.div 
+          className="join-action"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.3 }}
+        >
+          <motion.button
             className="btn btn-primary btn-lg"
             onClick={joinRoom}
             disabled={code.length !== 6 || joining || roomStatus === ROOM_STATES.RECEIVER_JOINED}
             id="join-room-btn"
+            whileHover={{ scale: 1.02, boxShadow: '0 0 40px var(--accent-glow)' }}
+            whileTap={{ scale: 0.98 }}
+            animate={joining ? { scale: [1, 0.98, 1] } : {}}
+            transition={joining ? { duration: 1, repeat: Infinity } : {}}
           >
-            {joining ? '⏳ Joining...' : '📥 Join Room'}
-          </button>
-        </div>
+            {joining ? (
+              <>
+                <motion.div 
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  style={{ display: 'inline-block', marginRight: '8px' }}
+                >
+                  <Loader2 size={20} />
+                </motion.div>
+                Joining...
+              </>
+            ) : (
+              <>
+                <Download size={20} className="mr-2" />
+                Join Room
+              </>
+            )}
+          </motion.button>
+        </motion.div>
 
-        {error && <div className="join-error">{error}</div>}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              className="join-error"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+            >
+              <AlertCircle size={16} className="inline mr-2" />
+              {error}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {roomStatus === ROOM_STATES.RECEIVER_JOINED && !fileMetadata && !error && (
-          <div className="join-waiting">
-            <div className="join-waiting-spinner">⏳</div>
-            <div className="join-waiting-text">
-              Connected to room. Waiting for the sender to approve your request…
-            </div>
-          </div>
+        <AnimatePresence>
+          {roomStatus === ROOM_STATES.RECEIVER_JOINED && !fileMetadata && !error && (
+            <motion.div 
+              className="join-waiting"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.4 }}
+            >
+              <motion.div 
+                className="join-waiting-spinner"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+              >
+                <Clock size={48} className="text-cyan-400" />
+              </motion.div>
+              <motion.div 
+                className="join-waiting-text"
+                animate={{ 
+                  opacity: [0.6, 1, 0.6],
+                  y: [0, -5, 0]
+                }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                Connected to room. Waiting for the sender to approve your request…
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      <AnimatePresence>
+        {fileMetadata && (
+          <ApprovalModal
+            fileMetadata={fileMetadata}
+            onAccept={handleAccept}
+            onReject={handleReject}
+          />
         )}
-      </div>
-
-      {fileMetadata && (
-        <ApprovalModal
-          fileMetadata={fileMetadata}
-          onAccept={handleAccept}
-          onReject={handleReject}
-        />
-      )}
-    </div>
+      </AnimatePresence>
+    </motion.div>
   );
 }

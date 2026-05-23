@@ -1,12 +1,15 @@
 .dropzone {
   position: relative;
   border: 2px dashed var(--border-primary);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   padding: var(--space-10) var(--space-6);
   text-align: center;
   cursor: pointer;
   transition: all var(--transition-base);
   overflow: hidden;
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .dropzone::before {
@@ -17,16 +20,19 @@
   opacity: 0;
   transition: opacity var(--transition-base);
   pointer-events: none;
+  background-size: 200% 200%;
 }
 
 .dropzone:hover,
 .dropzone.drag-over {
   border-color: var(--accent-primary);
   background: var(--accent-glow);
+  box-shadow: 0 0 40px var(--accent-glow), 0 0 80px rgba(56, 189, 248, 0.1);
 }
 
 .dropzone.drag-over::before {
-  opacity: 0.05;
+  opacity: 0.08;
+  animation: morphBackground 3s ease infinite;
 }
 
 .dropzone.has-file {
@@ -35,24 +41,29 @@
   background: var(--success-bg);
   cursor: default;
   padding: var(--space-6);
+  box-shadow: 0 0 30px rgba(52, 211, 153, 0.15);
 }
 
 .dropzone-icon {
-  font-size: 3rem;
   margin-bottom: var(--space-4);
-  display: block;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  filter: drop-shadow(0 0 20px rgba(56, 189, 248, 0.3));
 }
 
 .dropzone-title {
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 700;
   color: var(--text-primary);
   margin-bottom: var(--space-2);
+  letter-spacing: -0.02em;
 }
 
 .dropzone-subtitle {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--text-tertiary);
+  font-weight: 500;
 }
 
 /* ── Multi-file list ──────────────────────── */
@@ -90,16 +101,21 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.03);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-primary);
   text-align: left;
-  transition: background var(--transition-base);
+  transition: all var(--transition-base);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .dropzone-file-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-hover);
+  transform: translateX(4px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
 .dropzone-file-item-icon {
@@ -128,37 +144,44 @@
 
 .dropzone-remove-btn {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  background: rgba(248, 113, 113, 0.1);
+  background: rgba(248, 113, 113, 0.15);
   color: var(--error);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 0.75rem;
   transition: all var(--transition-base);
   line-height: 1;
 }
 
 .dropzone-remove-btn:hover {
-  background: rgba(248, 113, 113, 0.25);
-  transform: scale(1.1);
+  background: rgba(248, 113, 113, 0.3);
+  box-shadow: 0 0 20px rgba(248, 113, 113, 0.3);
 }
 
 .dropzone-change {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   margin-top: var(--space-4);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: var(--accent-primary);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  transition: all var(--transition-base);
 }
 
 .dropzone-change:hover {
-  text-decoration: underline;
+  background: rgba(56, 189, 248, 0.2);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 20px var(--accent-glow);
 }
 
 .dropzone input[type="file"] {

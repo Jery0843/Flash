@@ -7,37 +7,55 @@
 
 .receiver-list-empty {
   margin-top: var(--space-4);
-  padding: var(--space-4);
+  padding: var(--space-6);
   text-align: center;
   color: var(--text-secondary);
   font-size: 0.9rem;
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
 }
 
 .receiver-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  gap: var(--space-3);
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-sm);
+}
+
+.receiver-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 .receiver-card.status-pending-approval {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 16px -8px var(--accent);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3), 0 0 20px rgba(56, 189, 248, 0.15);
+  animation: glow 2s ease-in-out infinite;
 }
 
 .receiver-card.status-transferring {
-  border-color: var(--success, #34d399);
+  border-color: var(--success);
+  box-shadow: 0 0 20px rgba(52, 211, 153, 0.15);
 }
 
 .receiver-card.status-completed {
-  border-color: var(--success, #34d399);
-  opacity: 0.85;
+  border-color: var(--success);
+  background: rgba(52, 211, 153, 0.05);
 }
 
 .receiver-card.status-failed,
@@ -62,7 +80,14 @@
 }
 
 .receiver-card-avatar {
-  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-primary);
 }
 
 .receiver-card-code {
@@ -99,16 +124,20 @@
 
 .receiver-progress-bar {
   width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 999px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
   overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .receiver-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), #34d399);
-  transition: width 0.15s linear;
+  background: var(--gradient-progress);
+  background-size: 200% 100%;
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 10px var(--accent-glow);
+  animation: morphBackground 2s ease infinite;
 }
 
 .receiver-progress-meta {
@@ -122,16 +151,26 @@
 
 .receiver-card-error {
   font-size: 0.8rem;
-  color: var(--error, #f87171);
-  background: var(--error-bg, rgba(248, 113, 113, 0.08));
+  color: var(--error);
+  background: var(--error-bg);
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .receiver-card-actions {
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
+  margin-top: var(--space-1);
+}
+
+.action-buttons {
+  display: flex;
+  gap: var(--space-2);
 }
 
 .receiver-card-actions:empty {

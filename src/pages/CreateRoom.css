@@ -19,7 +19,20 @@
   transition: color var(--transition-fast);
   text-decoration: none;
 }
-.page-back:hover { color: var(--text-primary); }
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.back-button:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
 
 .page-title {
   font-size: 1.75rem;
@@ -64,8 +77,23 @@
 
 .password-toggle input[type="checkbox"] {
   accent-color: var(--accent-primary);
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.password-checkbox {
+  accent-color: var(--accent-primary);
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.password-text {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  transition: color var(--transition-fast);
 }
 
 .create-action {
@@ -95,10 +123,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
+  background: var(--bg-glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-md);
 }
 
 .sender-file-row {
@@ -106,6 +137,14 @@
   justify-content: space-between;
   gap: var(--space-3);
   font-size: 0.85rem;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.sender-file-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateX(4px);
 }
 
 .sender-file-name {
@@ -118,4 +157,30 @@
 .sender-file-size {
   color: var(--text-secondary);
   flex-shrink: 0;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.receiver-count {
+  background: var(--accent-primary);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: var(--space-1);
+}
+
+.error-message {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--error-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: var(--error);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 0 20px rgba(248, 113, 113, 0.15);
 }

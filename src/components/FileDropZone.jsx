@@ -1,10 +1,22 @@
 import { useState, useRef, useCallback } from 'react';
-import { formatFileSize, getFileIcon, MAX_FILE_SIZE } from '../lib/constants';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Upload, File, X, Plus, FileText, Image, Video, Music, Archive, FileCode } from 'lucide-react';
+import { formatFileSize, MAX_FILE_SIZE } from '../lib/constants';
 import './FileDropZone.css';
 
 export function FileDropZone({ onFilesSelect, selectedFiles = [], disabled }) {
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef(null);
+
+  const getFileIcon = (type, name) => {
+    if (type?.startsWith('image/')) return <Image size={20} className="text-blue-400" />;
+    if (type?.startsWith('video/')) return <Video size={20} className="text-purple-400" />;
+    if (type?.startsWith('audio/')) return <Music size={20} className="text-pink-400" />;
+    if (type === 'application/pdf') return <FileText size={20} className="text-red-400" />;
+    if (name?.endsWith('.zip') || name?.endsWith('.rar') || name?.endsWith('.7z') || type?.includes('zip') || type?.includes('compressed')) return <Archive size={20} className="text-yellow-400" />;
+    if (type?.startsWith('text/') || name?.endsWith('.txt') || name?.endsWith('.md')) return <FileCode size={20} className="text-green-400" />;
+    return <File size={20} className="text-gray-400" />;
+  };
 
   const addFiles = useCallback((newFileList) => {
     const incoming = Array.from(newFileList);
@@ -87,13 +99,18 @@ export function FileDropZone({ onFilesSelect, selectedFiles = [], disabled }) {
   ].filter(Boolean).join(' ');
 
   return (
-    <div
+    <motion.div
       className={className}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onClick={!hasFiles ? handleClick : undefined}
       id="file-dropzone"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+      whileHover={!hasFiles ? { scale: 1.01 } : {}}
+      whileTap={!hasFiles ? { scale: 0.99 } : {}}
     >
       <input
         type="file"
@@ -104,50 +121,97 @@ export function FileDropZone({ onFilesSelect, selectedFiles = [], disabled }) {
       />
       {hasFiles ? (
         <div className="dropzone-file-list">
-          <div className="dropzone-file-summary">
-            <span className="dropzone-file-summary-icon">🗂️</span>
+          <motion.div 
+            className="dropzone-file-summary"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <span className="dropzone-file-summary-icon">
+              <motion.div
+                animate={{ rotate: [0, 10, -10, 0] }}
+                transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 3 }}
+              >
+                <Archive size={24} className="text-cyan-400" />
+              </motion.div>
+            </span>
             <span>{selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''}</span>
             <span className="dropzone-file-summary-sep">·</span>
             <span>{formatFileSize(totalSize)} total</span>
-          </div>
+          </motion.div>
           <div className="dropzone-file-items">
-            {selectedFiles.map((file, i) => (
-              <div className="dropzone-file-item" key={`${file.name}-${file.size}-${i}`}>
-                <span className="dropzone-file-item-icon">{getFileIcon(file.type, file.name)}</span>
-                <div className="dropzone-file-item-info">
-                  <div className="dropzone-file-item-name">{file.name}</div>
-                  <div className="dropzone-file-item-meta">
-                    {formatFileSize(file.size)} · {file.type || 'Unknown'}
+            <AnimatePresence mode="popLayout">
+              {selectedFiles.map((file, i) => (
+                <motion.div
+                  className="dropzone-file-item"
+                  key={`${file.name}-${file.size}-${i}`}
+                  initial={{ opacity: 0, x: -20, scale: 0.9 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, x: 20, scale: 0.9 }}
+                  transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                  layout
+                >
+                  <span className="dropzone-file-item-icon">{getFileIcon(file.type, file.name)}</span>
+                  <div className="dropzone-file-item-info">
+                    <div className="dropzone-file-item-name">{file.name}</div>
+                    <div className="dropzone-file-item-meta">
+                      {formatFileSize(file.size)} · {file.type || 'Unknown'}
+                    </div>
                   </div>
-                </div>
-                {!disabled && (
-                  <button
-                    className="dropzone-remove-btn"
-                    onClick={(e) => { e.stopPropagation(); removeFile(i); }}
-                    title="Remove file"
-                    aria-label={`Remove ${file.name}`}
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            ))}
+                  {!disabled && (
+                    <motion.button
+                      className="dropzone-remove-btn"
+                      onClick={(e) => { e.stopPropagation(); removeFile(i); }}
+                      title="Remove file"
+                      aria-label={`Remove ${file.name}`}
+                      whileHover={{ scale: 1.15 }}
+                      whileTap={{ scale: 0.9 }}
+                    >
+                      <X size={16} />
+                    </motion.button>
+                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
           </div>
         </div>
       ) : (
-        <>
-          <span className="dropzone-icon">📁</span>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+        >
+          <motion.div
+            className="dropzone-icon"
+            animate={{ 
+              y: [0, -10, 0],
+              rotate: [0, 5, -5, 0]
+            }}
+            transition={{ 
+              duration: 2, 
+              repeat: Infinity, 
+              ease: "easeInOut" 
+            }}
+          >
+            <Upload size={64} className="text-cyan-400" />
+          </motion.div>
           <div className="dropzone-title">Drop files here or click to browse</div>
           <div className="dropzone-subtitle">
             Any file type · Multiple files · Max {formatFileSize(MAX_FILE_SIZE)} each
           </div>
-        </>
+        </motion.div>
       )}
       {hasFiles && !disabled && (
-        <span className="dropzone-change" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
-          + Add more files
-        </span>
+        <motion.span 
+          className="dropzone-change" 
+          onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          <Plus size={16} className="inline mr-1" />
+          Add more files
+        </motion.span>
       )}
-    </div>
+    </motion.div>
   );
 }

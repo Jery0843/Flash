@@ -10,7 +10,7 @@ export function FileDropZone({ onFilesSelect, selectedFiles = [], disabled }) {
     const incoming = Array.from(newFileList);
     const rejected = [];
 
-    const filtered = incoming.filter((f) => {
+    const sizeFiltered = incoming.filter((f) => {
       if (f.size > MAX_FILE_SIZE) {
         rejected.push(f.name);
         return false;
@@ -22,15 +22,31 @@ export function FileDropZone({ onFilesSelect, selectedFiles = [], disabled }) {
       alert(`These files exceed the ${formatFileSize(MAX_FILE_SIZE)} limit and were skipped:\n${rejected.join('\n')}`);
     }
 
-    if (filtered.length === 0) return;
+    if (sizeFiltered.length === 0) return;
 
-    // Deduplicate by name+size
-    const existing = new Set(selectedFiles.map((f) => `${f.name}::${f.size}`));
-    const unique = filtered.filter((f) => !existing.has(`${f.name}::${f.size}`));
-
-    if (unique.length > 0) {
-      onFilesSelect([...selectedFiles, ...unique]);
+    // Deduplicate within the incoming list first. Some platforms (e.g. certain
+    // Linux file managers / Chromium builds) deliver a dragged archive as both
+    // a File entry and a path-derived entry, so dataTransfer.files can contain
+    // the same File twice — which previously doubled the displayed total.
+    const seen = new Set();
+    const incomingUnique = [];
+    for (const f of sizeFiltered) {
+      const key = `${f.name}::${f.size}::${f.lastModified}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      incomingUnique.push(f);
     }
+
+    // Then deduplicate against the latest selectedFiles via a functional
+    // update so we don't read stale state across rapid remove→re-drop cycles.
+    onFilesSelect((prev) => {
+      const prevList = Array.isArray(prev) ? prev : selectedFiles;
+      const existing = new Set(prevList.map((f) => `${f.name}::${f.size}::${f.lastModified}`));
+      const toAdd = incomingUnique.filter(
+        (f) => !existing.has(`${f.name}::${f.size}::${f.lastModified}`)
+      );
+      return toAdd.length > 0 ? [...prevList, ...toAdd] : prevList;
+    });
   }, [selectedFiles, onFilesSelect]);
 
   const removeFile = useCallback((index) => {

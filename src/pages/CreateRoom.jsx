@@ -6,6 +6,7 @@ import { FileDropZone } from '../components/FileDropZone';
 import { RoomCodeDisplay } from '../components/RoomCodeDisplay';
 import { StatusIndicator } from '../components/StatusIndicator';
 import { ReceiverList } from '../components/ReceiverList';
+import { SEO } from '../components/SEO';
 import { useSignaling } from '../hooks/useSignaling';
 import { MSG, ROOM_STATES, CHUNK_SIZE, formatFileSize } from '../lib/constants';
 import { sanitizePassword } from '../lib/sanitize';
@@ -136,6 +137,15 @@ export function CreateRoom() {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
+      <SEO 
+        title="Send Files" 
+        description="Select files, create a secure room, and share the code to start a fast P2P transfer."
+        url="/create"
+        breadcrumbs={[
+          { name: 'Home', path: '/' },
+          { name: 'Send', path: '/create' }
+        ]}
+      />
       <motion.div 
         className="page-header"
         initial={{ y: -20, opacity: 0 }}

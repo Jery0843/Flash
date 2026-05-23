@@ -5,6 +5,7 @@ import { ArrowLeft, Download, Lock, Clock, Loader2, AlertCircle, Key } from 'luc
 import { useSignaling } from '../hooks/useSignaling';
 import { ApprovalModal } from '../components/ApprovalModal';
 import { StatusIndicator } from '../components/StatusIndicator';
+import { SEO } from '../components/SEO';
 import { MSG, ROOM_STATES } from '../lib/constants';
 import { validateRoomCode, sanitizePassword, validateFileMetadata, validateFileManifest } from '../lib/sanitize';
 import './JoinRoom.css';
@@ -141,6 +142,15 @@ export function JoinRoom() {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
+      <SEO 
+        title="Receive Files" 
+        description="Enter a room code to securely receive files directly from the sender."
+        url="/join"
+        breadcrumbs={[
+          { name: 'Home', path: '/' },
+          { name: 'Receive', path: '/join' }
+        ]}
+      />
       <motion.div 
         className="page-header"
         initial={{ y: -20, opacity: 0 }}

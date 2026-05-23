@@ -1,0 +1,16 @@
+{
+  "name": "Flash File Transfer",
+  "short_name": "Flash",
+  "description": "Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#00f3ff",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

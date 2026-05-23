@@ -6,6 +6,7 @@ import { StatusIndicator } from '../components/StatusIndicator';
 import { TransferProgress } from '../components/TransferProgress';
 import { TransferStats } from '../components/TransferStats';
 import { FilePreview } from '../components/FilePreview';
+import { SEO } from '../components/SEO';
 import { useSignaling } from '../hooks/useSignaling';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useFileTransfer } from '../hooks/useFileTransfer';
@@ -200,6 +201,11 @@ export function TransferRoom() {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
+      <SEO 
+        title="Active Transfer" 
+        description="A secure peer-to-peer file transfer is currently in progress."
+        url={location.pathname}
+      />
       <motion.div 
         className="transfer-header"
         initial={{ y: -20, opacity: 0 }}

@@ -1,9 +1,15 @@
 import { Link } from 'react-router-dom';
+import { SEO } from '../components/SEO';
 import './Home.css';
 
 export function Home() {
   return (
     <div className="home-page">
+      <SEO 
+        title="Home"
+        description="Flash - Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing."
+        url="/"
+      />
       <div className="home-bg" aria-hidden="true">
         <div className="home-bg-orb" />
         <div className="home-bg-orb" />

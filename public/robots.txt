@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://flash-4n9.pages.dev/sitemap.xml

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Flash — File Transfer Engine
+   Flash — File Transfer Engine (Multi-File)
    Transport-agnostic chunking, reassembly, and progress.
    Works with both WebRTC DataChannel and WebSocket relay.
    ═══════════════════════════════════════════════════════════ */
@@ -111,37 +111,54 @@ class ProgressTracker {
 }
 
 // ═══════════════════════════════════════════════════════════
-// File Sender
+// Multi-File Sender
+// Sends files sequentially over a single DataChannel.
+// Protocol:
+//   TEXT: {"ctrl":"file_start", ...}
+//   BINARY: chunk 0, chunk 1, ..., chunk N
+//   TEXT: {"ctrl":"file_end", index: 0}
+//   (repeat for next file)
+//   TEXT: {"ctrl":"all_complete"}
 // ═══════════════════════════════════════════════════════════
 
 export class FileSender {
   /**
-   * @param {File} file - The file to send
+   * @param {File[]} files - Array of files to send
    * @param {object} transport - Must have .send(data), .bufferedAmount, .on('buffer-low', cb)
    */
-  constructor(file, transport) {
-    this.file = file;
+  constructor(files, transport) {
+    this.files = Array.isArray(files) ? files : [files];
     this.transport = transport;
-    this.totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    this.currentFileIndex = 0;
     this.currentChunk = 0;
+    this.totalChunks = 0;
     this.paused = false;
     this.cancelled = false;
-    this.tracker = new ProgressTracker(file.size);
-    this.onProgress = null;
-    this.onComplete = null;
-    this.onError = null;
     this._sending = false;
     this._bufferCleanup = null;
     this._resumeTimer = null;
+
+    // Overall progress across all files
+    const totalBytes = this.files.reduce((sum, f) => sum + f.size, 0);
+    this.tracker = new ProgressTracker(totalBytes);
+
+    // Callbacks
+    this.onProgress = null;
+    this.onComplete = null;
+    this.onError = null;
+    this.onFileStart = null;
   }
 
-  getMetadata() {
+  getManifest() {
     return {
-      name: this.file.name,
-      size: this.file.size,
-      type: this.file.type || 'application/octet-stream',
-      totalChunks: this.totalChunks,
-      chunkSize: CHUNK_SIZE,
+      files: this.files.map((f) => ({
+        name: f.name,
+        size: f.size,
+        type: f.type || 'application/octet-stream',
+        totalChunks: Math.ceil(f.size / CHUNK_SIZE),
+      })),
+      totalFiles: this.files.length,
+      totalSize: this.files.reduce((sum, f) => sum + f.size, 0),
     };
   }
 
@@ -157,7 +174,7 @@ export class FileSender {
     });
 
     try {
-      await this._pump();
+      await this._sendAllFiles();
     } catch (err) {
       if (!this.cancelled) {
         this.onError?.(err);
@@ -183,60 +200,127 @@ export class FileSender {
     this._bufferCleanup?.();
   }
 
-  async _pump() {
+  async _sendAllFiles() {
+    for (let i = 0; i < this.files.length; i++) {
+      if (this.cancelled) return;
+
+      this.currentFileIndex = i;
+      const file = this.files[i];
+      this.totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+      this.currentChunk = 0;
+
+      // Send file_start control message
+      this._sendControl({
+        ctrl: 'file_start',
+        index: i,
+        name: file.name,
+        size: file.size,
+        type: file.type || 'application/octet-stream',
+        totalChunks: this.totalChunks,
+      });
+
+      this.onFileStart?.(i, file.name);
+
+      // Send all chunks for this file
+      await this._pumpFile(file);
+
+      if (this.cancelled) return;
+
+      // Send file_end control message
+      this._sendControl({ ctrl: 'file_end', index: i });
+    }
+
+    if (!this.cancelled) {
+      this._sendControl({ ctrl: 'all_complete' });
+      this._bufferCleanup?.();
+      this._clearResumeTimer();
+      this.onComplete?.(this.tracker.getStats());
+    }
+  }
+
+  _sendControl(obj) {
+    this.transport.send(JSON.stringify(obj));
+  }
+
+  _pumpFile(file) {
+    return new Promise((resolve, reject) => {
+      this._pumpResolve = resolve;
+      this._pumpReject = reject;
+      this._currentPumpFile = file;
+      this._doPump();
+    });
+  }
+
+  _doPump() {
     if (this._sending || this.paused || this.cancelled) return;
     this._sending = true;
 
-    try {
-      while (this.currentChunk < this.totalChunks && !this.paused && !this.cancelled) {
-        let sentInBatch = 0;
+    const file = this._currentPumpFile;
 
-        while (
-          sentInBatch < CHUNKS_PER_BATCH &&
-          this.currentChunk < this.totalChunks &&
-          !this.paused &&
-          !this.cancelled
-        ) {
-          const buffered = this.transport.bufferedAmount ?? 0;
-          if (buffered >= BUFFER_HIGH_WATER_MARK) {
-            this._scheduleResume();
-            return;
+    const run = async () => {
+      try {
+        while (this.currentChunk < this.totalChunks && !this.paused && !this.cancelled) {
+          let sentInBatch = 0;
+
+          while (
+            sentInBatch < CHUNKS_PER_BATCH &&
+            this.currentChunk < this.totalChunks &&
+            !this.paused &&
+            !this.cancelled
+          ) {
+            const buffered = this.transport.bufferedAmount ?? 0;
+            if (buffered >= BUFFER_HIGH_WATER_MARK) {
+              this._sending = false;
+              this._scheduleResume();
+              return;
+            }
+
+            const offset = this.currentChunk * CHUNK_SIZE;
+            const end = Math.min(offset + CHUNK_SIZE, file.size);
+            const blob = file.slice(offset, end);
+            const arrayBuffer = await blob.arrayBuffer();
+            const encoded = encodeChunk(this.currentChunk, this.totalChunks, arrayBuffer);
+            const sent = this.transport.send(encoded);
+
+            if (!sent) {
+              throw new Error('Failed to send chunk');
+            }
+
+            this.tracker.update(end - offset);
+            this.currentChunk += 1;
+            sentInBatch += 1;
+
+            this.onProgress?.({
+              ...this.tracker.getStats(),
+              currentFileIndex: this.currentFileIndex,
+              currentFileName: file.name,
+              totalFiles: this.files.length,
+            });
           }
 
-          const offset = this.currentChunk * CHUNK_SIZE;
-          const end = Math.min(offset + CHUNK_SIZE, this.file.size);
-          const blob = this.file.slice(offset, end);
-          const arrayBuffer = await blob.arrayBuffer();
-          const encoded = encodeChunk(this.currentChunk, this.totalChunks, arrayBuffer);
-          const sent = this.transport.send(encoded);
-
-          if (!sent) {
-            throw new Error('Failed to send chunk');
+          if (this.currentChunk < this.totalChunks) {
+            await waitForNextFrame();
           }
-
-          this.tracker.update(end - offset);
-          this.currentChunk += 1;
-          sentInBatch += 1;
-          this.onProgress?.(this.tracker.getStats());
         }
 
-        if (this.currentChunk < this.totalChunks) {
-          await waitForNextFrame();
+        if (this.currentChunk >= this.totalChunks && !this.cancelled) {
+          this._sending = false;
+          this._pumpResolve?.();
+        }
+      } catch (err) {
+        this._sending = false;
+        if (!this.cancelled) {
+          this._pumpReject?.(err);
         }
       }
+    };
 
-      if (this.currentChunk >= this.totalChunks && !this.cancelled) {
-        this._bufferCleanup?.();
-        this._clearResumeTimer();
-        this.onComplete?.(this.tracker.getStats());
-      }
-    } catch (err) {
-      if (!this.cancelled) {
-        this.onError?.(err);
-      }
-    } finally {
+    run().catch((err) => {
       this._sending = false;
-    }
+      if (!this.cancelled) {
+        this._pumpReject?.(err);
+      }
+    });
   }
 
   _scheduleResume(delay = RESUME_POLL_MS) {
@@ -244,7 +328,6 @@ export class FileSender {
 
     this._resumeTimer = setTimeout(() => {
       this._resumeTimer = null;
-
       if (this.paused || this.cancelled) return;
 
       const buffered = this.transport.bufferedAmount ?? 0;
@@ -253,11 +336,7 @@ export class FileSender {
         return;
       }
 
-      this._pump().catch((err) => {
-        if (!this.cancelled) {
-          this.onError?.(err);
-        }
-      });
+      this._doPump();
     }, delay);
   }
 
@@ -270,31 +349,97 @@ export class FileSender {
 }
 
 // ═══════════════════════════════════════════════════════════
-// File Receiver
+// Multi-File Receiver
 // ═══════════════════════════════════════════════════════════
 
 export class FileReceiver {
   /**
-   * @param {object} metadata - { name, size, type, totalChunks }
+   * @param {object} manifest - { files: [{name, size, type, totalChunks}], totalSize, totalFiles }
    */
-  constructor(metadata) {
-    this.metadata = metadata;
-    this.chunks = new Array(metadata.totalChunks);
-    this.receivedCount = 0;
-    this.tracker = new ProgressTracker(metadata.size);
+  constructor(manifest) {
+    this.manifest = manifest;
+    this.totalSize = manifest.totalSize;
+    this.totalFiles = manifest.totalFiles;
+    this.receivedFiles = [];
+    this.tracker = new ProgressTracker(this.totalSize);
+
+    // Current file state
+    this.currentFileMeta = null;
+    this.chunks = null;
+    this.receivedChunkCount = 0;
+    this.cancelled = false;
+
+    // Callbacks
     this.onProgress = null;
+    this.onFileComplete = null;
     this.onComplete = null;
     this.onError = null;
-    this.cancelled = false;
   }
 
-  handleChunk(buffer) {
+  /**
+   * Handle incoming DataChannel message.
+   * Can be a string (JSON control) or ArrayBuffer (binary chunk).
+   */
+  handleMessage(data) {
     if (this.cancelled) return;
+
+    if (typeof data === 'string') {
+      this._handleControl(data);
+    } else if (data instanceof ArrayBuffer) {
+      this._handleChunk(data);
+    }
+  }
+
+  cancel() {
+    this.cancelled = true;
+    this.chunks = null;
+  }
+
+  _handleControl(raw) {
+    try {
+      const msg = JSON.parse(raw);
+
+      switch (msg.ctrl) {
+        case 'file_start':
+          this.currentFileMeta = {
+            index: msg.index,
+            name: msg.name,
+            size: msg.size,
+            type: msg.type,
+            totalChunks: msg.totalChunks,
+          };
+          this.chunks = new Array(msg.totalChunks);
+          this.receivedChunkCount = 0;
+          break;
+
+        case 'file_end':
+          if (this.currentFileMeta && this.receivedChunkCount === this.currentFileMeta.totalChunks) {
+            this._assembleCurrentFile();
+          }
+          break;
+
+        case 'all_complete':
+          this.onComplete?.({
+            files: this.receivedFiles,
+            stats: this.tracker.getStats(),
+          });
+          break;
+
+        default:
+          console.warn('[FileReceiver] Unknown control message:', msg.ctrl);
+      }
+    } catch (err) {
+      console.error('[FileReceiver] Failed to parse control message:', err);
+    }
+  }
+
+  _handleChunk(buffer) {
+    if (!this.currentFileMeta || !this.chunks) return;
 
     try {
       const { index, total, data } = decodeChunk(buffer);
 
-      if (index < 0 || index >= total || total !== this.metadata.totalChunks) {
+      if (index < 0 || index >= total || total !== this.currentFileMeta.totalChunks) {
         console.warn('[FileReceiver] Invalid chunk:', index, 'of', total);
         return;
       }
@@ -302,36 +447,48 @@ export class FileReceiver {
       if (this.chunks[index]) return;
 
       this.chunks[index] = data;
-      this.receivedCount++;
+      this.receivedChunkCount++;
       this.tracker.update(data.byteLength);
-      this.onProgress?.(this.tracker.getStats());
 
-      if (this.receivedCount === this.metadata.totalChunks) {
-        this._assemble();
+      this.onProgress?.({
+        ...this.tracker.getStats(),
+        currentFileIndex: this.currentFileMeta.index,
+        currentFileName: this.currentFileMeta.name,
+        totalFiles: this.totalFiles,
+        filesReceived: this.receivedFiles.length,
+      });
+
+      if (this.receivedChunkCount === this.currentFileMeta.totalChunks) {
+        this._assembleCurrentFile();
       }
     } catch (err) {
       this.onError?.(err);
     }
   }
 
-  cancel() {
-    this.cancelled = true;
-    this.chunks = [];
-  }
+  _assembleCurrentFile() {
+    if (!this.currentFileMeta || !this.chunks) return;
 
-  _assemble() {
     try {
-      const blob = new Blob(this.chunks.map((chunk) => new Uint8Array(chunk)), {
-        type: this.metadata.type,
-      });
+      const blob = new Blob(
+        this.chunks.map((chunk) => new Uint8Array(chunk)),
+        { type: this.currentFileMeta.type }
+      );
 
-      this.chunks = [];
-
-      this.onComplete?.({
+      const fileResult = {
         blob,
-        metadata: this.metadata,
-        stats: this.tracker.getStats(),
-      });
+        name: this.currentFileMeta.name,
+        type: this.currentFileMeta.type,
+        size: this.currentFileMeta.size,
+        index: this.currentFileMeta.index,
+      };
+
+      this.receivedFiles.push(fileResult);
+      this.onFileComplete?.(this.currentFileMeta.index, fileResult);
+
+      this.chunks = null;
+      this.currentFileMeta = null;
+      this.receivedChunkCount = 0;
     } catch (err) {
       this.onError?.(err);
     }

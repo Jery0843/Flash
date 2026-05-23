@@ -7,14 +7,20 @@ export function useFileTransfer() {
   const receiverRef = useRef(null);
   const [transferState, setTransferState] = useState('idle'); // idle | sending | receiving | paused | completed | failed
   const [stats, setStats] = useState(null);
-  const [receivedFile, setReceivedFile] = useState(null);
+  const [receivedFiles, setReceivedFiles] = useState([]);
+  const [currentFileIndex, setCurrentFileIndex] = useState(0);
 
   // ── Sender ──────────────────────────────────────────────
 
-  const startSending = useCallback((file, dataChannel) => {
+  const startSending = useCallback((files, dataChannel) => {
+    const fileArray = Array.isArray(files) ? files : [files];
     const transport = createTransport(dataChannel);
-    const sender = new FileSender(file, transport);
+    const sender = new FileSender(fileArray, transport);
     senderRef.current = sender;
+
+    sender.onFileStart = (index) => {
+      setCurrentFileIndex(index);
+    };
 
     sender.onProgress = (s) => {
       setStats({ ...s });
@@ -36,17 +42,26 @@ export function useFileTransfer() {
 
   // ── Receiver ────────────────────────────────────────────
 
-  const startReceiving = useCallback((metadata, dataChannel) => {
-    const receiver = new FileReceiver(metadata);
+  const startReceiving = useCallback((manifest, dataChannel) => {
+    const receiver = new FileReceiver(manifest);
     receiverRef.current = receiver;
 
     receiver.onProgress = (s) => {
       setStats({ ...s });
+      if (s.currentFileIndex !== undefined) {
+        setCurrentFileIndex(s.currentFileIndex);
+      }
     };
 
-    receiver.onComplete = ({ blob, metadata: meta, stats: s }) => {
-      const safeName = sanitizeFilename(meta.name);
-      setReceivedFile({ blob, name: safeName, type: meta.type, size: meta.size });
+    receiver.onFileComplete = (index, fileResult) => {
+      const safeName = sanitizeFilename(fileResult.name);
+      setReceivedFiles((prev) => [
+        ...prev,
+        { ...fileResult, name: safeName },
+      ]);
+    };
+
+    receiver.onComplete = ({ stats: s }) => {
       setStats({ ...s });
       setTransferState('completed');
     };
@@ -60,7 +75,7 @@ export function useFileTransfer() {
 
     // Wire up data channel messages to receiver
     dataChannel.onmessage = (event) => {
-      receiver.handleChunk(event.data);
+      receiver.handleMessage(event.data);
     };
   }, []);
 
@@ -82,30 +97,40 @@ export function useFileTransfer() {
     setTransferState('failed');
   }, []);
 
-  const download = useCallback(() => {
-    if (receivedFile) {
-      downloadBlob(receivedFile.blob, receivedFile.name);
+  const download = useCallback((index) => {
+    const file = receivedFiles[index ?? 0];
+    if (file) {
+      downloadBlob(file.blob, file.name);
     }
-  }, [receivedFile]);
+  }, [receivedFiles]);
+
+  const downloadAll = useCallback(() => {
+    receivedFiles.forEach((file) => {
+      downloadBlob(file.blob, file.name);
+    });
+  }, [receivedFiles]);
 
   const reset = useCallback(() => {
     senderRef.current = null;
     receiverRef.current = null;
     setTransferState('idle');
     setStats(null);
-    setReceivedFile(null);
+    setReceivedFiles([]);
+    setCurrentFileIndex(0);
   }, []);
 
   return {
     transferState,
     stats,
-    receivedFile,
+    receivedFiles,
+    currentFileIndex,
     startSending,
     startReceiving,
     pause,
     resume,
     cancel,
     download,
+    downloadAll,
     reset,
   };
 }

@@ -2,26 +2,48 @@ import { useState, useRef, useCallback } from 'react';
 import { formatFileSize, getFileIcon, MAX_FILE_SIZE } from '../lib/constants';
 import './FileDropZone.css';
 
-export function FileDropZone({ onFileSelect, selectedFile, disabled }) {
+export function FileDropZone({ onFilesSelect, selectedFiles = [], disabled }) {
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef(null);
 
-  const handleFile = useCallback((file) => {
-    if (!file) return;
-    if (file.size > MAX_FILE_SIZE) {
-      alert(`File too large. Maximum size is ${formatFileSize(MAX_FILE_SIZE)}.`);
-      return;
+  const addFiles = useCallback((newFileList) => {
+    const incoming = Array.from(newFileList);
+    const rejected = [];
+
+    const filtered = incoming.filter((f) => {
+      if (f.size > MAX_FILE_SIZE) {
+        rejected.push(f.name);
+        return false;
+      }
+      return true;
+    });
+
+    if (rejected.length > 0) {
+      alert(`These files exceed the ${formatFileSize(MAX_FILE_SIZE)} limit and were skipped:\n${rejected.join('\n')}`);
     }
-    onFileSelect(file);
-  }, [onFileSelect]);
+
+    if (filtered.length === 0) return;
+
+    // Deduplicate by name+size
+    const existing = new Set(selectedFiles.map((f) => `${f.name}::${f.size}`));
+    const unique = filtered.filter((f) => !existing.has(`${f.name}::${f.size}`));
+
+    if (unique.length > 0) {
+      onFilesSelect([...selectedFiles, ...unique]);
+    }
+  }, [selectedFiles, onFilesSelect]);
+
+  const removeFile = useCallback((index) => {
+    const next = selectedFiles.filter((_, i) => i !== index);
+    onFilesSelect(next);
+  }, [selectedFiles, onFilesSelect]);
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     setDragOver(false);
     if (disabled) return;
-    const file = e.dataTransfer.files[0];
-    handleFile(file);
-  }, [disabled, handleFile]);
+    addFiles(e.dataTransfer.files);
+  }, [disabled, addFiles]);
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -35,14 +57,17 @@ export function FileDropZone({ onFileSelect, selectedFile, disabled }) {
   };
 
   const handleInputChange = (e) => {
-    handleFile(e.target.files[0]);
+    addFiles(e.target.files);
     e.target.value = '';
   };
+
+  const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+  const hasFiles = selectedFiles.length > 0;
 
   const className = [
     'dropzone',
     dragOver && 'drag-over',
-    selectedFile && 'has-file',
+    hasFiles && 'has-file',
   ].filter(Boolean).join(' ');
 
   return (
@@ -51,7 +76,7 @@ export function FileDropZone({ onFileSelect, selectedFile, disabled }) {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
-      onClick={!selectedFile ? handleClick : undefined}
+      onClick={!hasFiles ? handleClick : undefined}
       id="file-dropzone"
     >
       <input
@@ -59,29 +84,52 @@ export function FileDropZone({ onFileSelect, selectedFile, disabled }) {
         ref={inputRef}
         onChange={handleInputChange}
         disabled={disabled}
+        multiple
       />
-      {selectedFile ? (
-        <div className="dropzone-file">
-          <span className="dropzone-file-icon">{getFileIcon(selectedFile.type, selectedFile.name)}</span>
-          <div className="dropzone-file-info">
-            <div className="dropzone-file-name">{selectedFile.name}</div>
-            <div className="dropzone-file-meta">
-              {formatFileSize(selectedFile.size)} · {selectedFile.type || 'Unknown type'}
-            </div>
+      {hasFiles ? (
+        <div className="dropzone-file-list">
+          <div className="dropzone-file-summary">
+            <span className="dropzone-file-summary-icon">🗂️</span>
+            <span>{selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''}</span>
+            <span className="dropzone-file-summary-sep">·</span>
+            <span>{formatFileSize(totalSize)} total</span>
+          </div>
+          <div className="dropzone-file-items">
+            {selectedFiles.map((file, i) => (
+              <div className="dropzone-file-item" key={`${file.name}-${file.size}-${i}`}>
+                <span className="dropzone-file-item-icon">{getFileIcon(file.type, file.name)}</span>
+                <div className="dropzone-file-item-info">
+                  <div className="dropzone-file-item-name">{file.name}</div>
+                  <div className="dropzone-file-item-meta">
+                    {formatFileSize(file.size)} · {file.type || 'Unknown'}
+                  </div>
+                </div>
+                {!disabled && (
+                  <button
+                    className="dropzone-remove-btn"
+                    onClick={(e) => { e.stopPropagation(); removeFile(i); }}
+                    title="Remove file"
+                    aria-label={`Remove ${file.name}`}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       ) : (
         <>
           <span className="dropzone-icon">📁</span>
-          <div className="dropzone-title">Drop a file here or click to browse</div>
+          <div className="dropzone-title">Drop files here or click to browse</div>
           <div className="dropzone-subtitle">
-            Any file type · Max {formatFileSize(MAX_FILE_SIZE)}
+            Any file type · Multiple files · Max {formatFileSize(MAX_FILE_SIZE)} each
           </div>
         </>
       )}
-      {selectedFile && !disabled && (
+      {hasFiles && !disabled && (
         <span className="dropzone-change" onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}>
-          Change file
+          + Add more files
         </span>
       )}
     </div>

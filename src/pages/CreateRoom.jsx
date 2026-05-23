@@ -4,14 +4,14 @@ import { FileDropZone } from '../components/FileDropZone';
 import { RoomCodeDisplay } from '../components/RoomCodeDisplay';
 import { StatusIndicator } from '../components/StatusIndicator';
 import { useSignaling } from '../hooks/useSignaling';
-import { MSG, ROOM_STATES } from '../lib/constants';
+import { MSG, ROOM_STATES, CHUNK_SIZE, formatFileSize } from '../lib/constants';
 import { sanitizePassword } from '../lib/sanitize';
 import './CreateRoom.css';
 
 export function CreateRoom() {
   const navigate = useNavigate();
   const signaling = useSignaling();
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [roomCode, setRoomCode] = useState(null);
   const [roomStatus, setRoomStatus] = useState(null);
   const [usePassword, setUsePassword] = useState(false);
@@ -31,20 +31,25 @@ export function CreateRoom() {
       }),
       signaling.on(MSG.RECEIVER_JOINED, () => {
         setRoomStatus(ROOM_STATES.RECEIVER_JOINED);
-        // Send file metadata to receiver
-        if (file) {
-          signaling.send(MSG.FILE_METADATA, {
-            name: file.name,
-            size: file.size,
-            type: file.type || 'application/octet-stream',
-            totalChunks: Math.ceil(file.size / 65536),
-          });
+        // Send file manifest to receiver
+        if (files.length > 0) {
+          const manifest = {
+            files: files.map((f) => ({
+              name: f.name,
+              size: f.size,
+              type: f.type || 'application/octet-stream',
+              totalChunks: Math.ceil(f.size / CHUNK_SIZE),
+            })),
+            totalFiles: files.length,
+            totalSize: files.reduce((sum, f) => sum + f.size, 0),
+          };
+          signaling.send(MSG.FILE_METADATA, manifest);
         }
       }),
       signaling.on(MSG.TRANSFER_ACCEPT, () => {
         // Navigate to transfer room
         navigate(`/room/${roomCode}`, {
-          state: { role: 'sender', file, roomCode },
+          state: { role: 'sender', files, roomCode },
         });
       }),
       signaling.on(MSG.TRANSFER_REJECT, () => {
@@ -63,10 +68,10 @@ export function CreateRoom() {
     ];
 
     return () => cleanups.forEach(fn => fn?.());
-  }, [signaling.client, file, roomCode, roomStatus, navigate]);
+  }, [signaling.client, files, roomCode, roomStatus, navigate]);
 
   const createRoom = useCallback(async () => {
-    if (!file) return;
+    if (files.length === 0) return;
     setCreating(true);
     setError(null);
     try {
@@ -74,20 +79,21 @@ export function CreateRoom() {
         action: 'create',
         password: usePassword ? sanitizePassword(password) : undefined,
       });
-      // Do not send MSG.CREATE_ROOM via JSON, the server handles it on connect via URL params.
     } catch (err) {
       setError(err.message || 'Failed to connect');
       setCreating(false);
     }
-  }, [file, signaling, usePassword, password]);
+  }, [files, signaling, usePassword, password]);
+
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
 
   return (
     <div className="create-room-page">
       <div className="page-header">
         <Link to="/" className="page-back">← Back to home</Link>
-        <h1 className="page-title">Send a File</h1>
+        <h1 className="page-title">Send Files</h1>
         <p className="page-subtitle">
-          Select a file, create a room, and share the code with your recipient.
+          Select files, create a room, and share the code with your recipient.
         </p>
       </div>
 
@@ -96,8 +102,8 @@ export function CreateRoom() {
       {!roomCode && (
         <>
           <div className="create-section">
-            <div className="create-section-label">Select file</div>
-            <FileDropZone onFileSelect={setFile} selectedFile={file} disabled={creating} />
+            <div className="create-section-label">Select files</div>
+            <FileDropZone onFilesSelect={setFiles} selectedFiles={files} disabled={creating} />
           </div>
 
           <div className="password-section">
@@ -128,10 +134,12 @@ export function CreateRoom() {
             <button
               className="btn btn-primary btn-lg"
               onClick={createRoom}
-              disabled={!file || creating}
+              disabled={files.length === 0 || creating}
               id="create-room-btn"
             >
-              {creating ? '⏳ Creating...' : '⚡ Create Room'}
+              {creating
+                ? '⏳ Creating...'
+                : `⚡ Create Room${files.length > 0 ? ` (${files.length} file${files.length !== 1 ? 's' : ''} · ${formatFileSize(totalSize)})` : ''}`}
             </button>
           </div>
         </>

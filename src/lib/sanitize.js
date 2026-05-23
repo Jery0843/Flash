@@ -76,6 +76,33 @@ export function validateFileMetadata(metadata) {
 }
 
 /**
+ * Validate a multi-file manifest received from a peer.
+ * Returns { valid: boolean, error?: string }.
+ */
+export function validateFileManifest(manifest) {
+  if (!manifest || typeof manifest !== 'object') {
+    return { valid: false, error: 'Invalid manifest format' };
+  }
+
+  if (!Array.isArray(manifest.files) || manifest.files.length === 0) {
+    return { valid: false, error: 'Manifest contains no files' };
+  }
+
+  if (manifest.files.length > 100) {
+    return { valid: false, error: 'Too many files (max 100)' };
+  }
+
+  for (let i = 0; i < manifest.files.length; i++) {
+    const result = validateFileMetadata(manifest.files[i]);
+    if (!result.valid) {
+      return { valid: false, error: `File ${i + 1}: ${result.error}` };
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
  * Check if a file has a dangerous extension.
  */
 export function isDangerousFile(filename) {

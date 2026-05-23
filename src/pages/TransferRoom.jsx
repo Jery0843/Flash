@@ -7,13 +7,13 @@ import { FilePreview } from '../components/FilePreview';
 import { useSignaling } from '../hooks/useSignaling';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useFileTransfer } from '../hooks/useFileTransfer';
-import { MSG, ROOM_STATES, formatFileSize, getFileIcon } from '../lib/constants';
+import { MSG, ROOM_STATES, CHUNK_SIZE, formatFileSize, getFileIcon } from '../lib/constants';
 import './TransferRoom.css';
 
 export function TransferRoom() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, file, fileMetadata: initialMetadata } = location.state || {};
+  const { role, files: senderFiles, fileMetadata: initialMetadata } = location.state || {};
 
   const signaling = useSignaling();
   const webrtc = useWebRTC();
@@ -25,6 +25,20 @@ export function TransferRoom() {
   const hasStartedRef = useRef(false);
   const displayRoomStatus = fileTransfer.transferState === 'completed' ? ROOM_STATES.COMPLETED : roomStatus;
 
+  // Build manifest for display
+  const manifest = isSender
+    ? {
+        files: (senderFiles || []).map((f) => ({
+          name: f.name,
+          size: f.size,
+          type: f.type || 'application/octet-stream',
+          totalChunks: Math.ceil(f.size / CHUNK_SIZE),
+        })),
+        totalFiles: (senderFiles || []).length,
+        totalSize: (senderFiles || []).reduce((sum, f) => sum + f.size, 0),
+      }
+    : initialMetadata;
+
   // Redirect if no state
   useEffect(() => {
     if (!location.state) {
@@ -35,13 +49,11 @@ export function TransferRoom() {
   // WebRTC negotiation
   useEffect(() => {
     if (hasStartedRef.current || !signaling.client) return;
-
     hasStartedRef.current = true;
 
     const setupWebRTC = async () => {
       try {
         // Reuse the existing room socket across route changes.
-        // If it dropped unexpectedly, reconnect through the same singleton client.
         if (!signaling.client?.connected) {
           await signaling.connect();
         }
@@ -56,9 +68,12 @@ export function TransferRoom() {
         // Wire up connection events
         manager.on('channel-open', () => {
           setRoomStatus(ROOM_STATES.CONNECTED);
-          if (isSender && file) {
-            setRoomStatus(ROOM_STATES.TRANSFERRING);
-            fileTransfer.startSending(file, manager.dataChannel);
+          setRoomStatus(ROOM_STATES.TRANSFERRING);
+          if (isSender && senderFiles?.length > 0) {
+            fileTransfer.startSending(senderFiles, manager.dataChannel);
+          }
+          if (!isSender && initialMetadata) {
+            fileTransfer.startReceiving(initialMetadata, manager.dataChannel);
           }
         });
 
@@ -69,7 +84,6 @@ export function TransferRoom() {
 
         manager.on('fallback-ws', () => {
           setRoomStatus(ROOM_STATES.RELAY_FALLBACK);
-          // In MVP: show error. Full WS relay would be implemented here.
           setError('Direct connection failed. WebSocket relay not yet implemented in MVP.');
         });
 
@@ -101,14 +115,6 @@ export function TransferRoom() {
         if (isSender) {
           const offer = await manager.createOffer();
           signaling.send(MSG.SDP_OFFER, { sdp: offer });
-        }
-
-        // If receiver, wire up data receiving
-        if (!isSender && initialMetadata) {
-          manager.on('channel-open', () => {
-            setRoomStatus(ROOM_STATES.TRANSFERRING);
-            fileTransfer.startReceiving(initialMetadata, manager.dataChannel);
-          });
         }
 
       } catch (err) {
@@ -147,10 +153,8 @@ export function TransferRoom() {
     fileTransfer.resume();
   }, [fileTransfer]);
 
-  // File info for display
-  const displayFile = isSender
-    ? file ? { name: file.name, size: file.size, type: file.type } : null
-    : initialMetadata;
+  // Current file info for header display
+  const currentFile = manifest?.files?.[fileTransfer.currentFileIndex] || manifest?.files?.[0] || null;
 
   if (!location.state) return null;
 
@@ -158,23 +162,35 @@ export function TransferRoom() {
     <div className="transfer-room-page">
       <div className="transfer-header">
         <div className="transfer-header-left">
-          <h1>{isSender ? 'Sending File' : 'Receiving File'}</h1>
+          <h1>{isSender ? 'Sending Files' : 'Receiving Files'}</h1>
         </div>
-        <StatusIndicator status={roomStatus} />
+        <StatusIndicator status={displayRoomStatus} />
       </div>
 
       {/* File info card */}
-      {displayFile && (
+      {currentFile && manifest && (
         <div className="transfer-file-card glass-card">
           <div className="transfer-file-header">
             <span className="transfer-file-icon">
-              {getFileIcon(displayFile.type, displayFile.name)}
+              {manifest.totalFiles > 1 ? '🗂️' : getFileIcon(currentFile.type, currentFile.name)}
             </span>
             <div>
-              <div className="transfer-file-name">{displayFile.name}</div>
-              <div className="transfer-file-meta">
-                {formatFileSize(displayFile.size)} · {displayFile.type || 'Unknown'}
+              <div className="transfer-file-name">
+                {currentFile.name}
+                {manifest.totalFiles > 1 && (
+                  <span className="transfer-file-counter">
+                    {' '}({(fileTransfer.currentFileIndex ?? 0) + 1}/{manifest.totalFiles})
+                  </span>
+                )}
               </div>
+              <div className="transfer-file-meta">
+                {formatFileSize(currentFile.size)} · {currentFile.type || 'Unknown'}
+              </div>
+              {manifest.totalFiles > 1 && (
+                <div className="transfer-file-meta">
+                  {manifest.totalFiles} files · {formatFileSize(manifest.totalSize)} total
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -222,26 +238,62 @@ export function TransferRoom() {
           <div className="transfer-complete-icon">✅</div>
           <div className="transfer-complete-title">Transfer Complete!</div>
           <div className="transfer-complete-subtitle">
-            {isSender ? 'File sent successfully.' : 'File received successfully.'}
+            {isSender
+              ? `${manifest?.totalFiles || 1} file${(manifest?.totalFiles || 1) !== 1 ? 's' : ''} sent successfully.`
+              : `${fileTransfer.receivedFiles.length} file${fileTransfer.receivedFiles.length !== 1 ? 's' : ''} received successfully.`}
           </div>
 
-          {/* Preview for receiver */}
-          {!isSender && fileTransfer.receivedFile && (
+          {/* Preview + Download for receiver */}
+          {!isSender && fileTransfer.receivedFiles.length > 0 && (
             <>
+              {/* Show preview for last received file */}
               <FilePreview
-                blob={fileTransfer.receivedFile.blob}
-                name={fileTransfer.receivedFile.name}
-                type={fileTransfer.receivedFile.type}
+                blob={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].blob}
+                name={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].name}
+                type={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].type}
               />
-              <div style={{ marginTop: 'var(--space-4)' }}>
-                <button
-                  className="btn btn-primary btn-lg"
-                  onClick={fileTransfer.download}
-                  id="download-btn"
-                >
-                  📥 Download File
-                </button>
+              <div className="transfer-download-actions">
+                {fileTransfer.receivedFiles.length === 1 ? (
+                  <button
+                    className="btn btn-primary btn-lg"
+                    onClick={() => fileTransfer.download(0)}
+                    id="download-btn"
+                  >
+                    📥 Download File
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="btn btn-primary btn-lg"
+                      onClick={fileTransfer.downloadAll}
+                      id="download-all-btn"
+                    >
+                      📥 Download All ({fileTransfer.receivedFiles.length} files)
+                    </button>
+                  </>
+                )}
               </div>
+
+              {/* Individual file list for multi-file */}
+              {fileTransfer.receivedFiles.length > 1 && (
+                <div className="transfer-received-list">
+                  {fileTransfer.receivedFiles.map((file, i) => (
+                    <div className="transfer-received-item" key={`${file.name}-${i}`}>
+                      <span className="transfer-received-icon">{getFileIcon(file.type, file.name)}</span>
+                      <div className="transfer-received-info">
+                        <div className="transfer-received-name">{file.name}</div>
+                        <div className="transfer-received-meta">{formatFileSize(file.size)}</div>
+                      </div>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => fileTransfer.download(i)}
+                      >
+                        📥
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
 

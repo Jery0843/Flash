@@ -55,11 +55,26 @@ export function validateMessage(raw) {
       break;
 
     case MSG.FILE_METADATA:
-      if (!payload.name || typeof payload.name !== 'string') {
-        return { valid: false, error: 'Missing file name' };
-      }
-      if (typeof payload.size !== 'number' || payload.size <= 0) {
-        return { valid: false, error: 'Invalid file size' };
+      // Support manifest format ({files: [...]}) or legacy single-file
+      if (payload.files && Array.isArray(payload.files)) {
+        if (payload.files.length === 0 || payload.files.length > 100) {
+          return { valid: false, error: 'Invalid file count in manifest' };
+        }
+        for (const f of payload.files) {
+          if (!f.name || typeof f.name !== 'string') {
+            return { valid: false, error: 'Missing file name in manifest' };
+          }
+          if (typeof f.size !== 'number' || f.size <= 0) {
+            return { valid: false, error: 'Invalid file size in manifest' };
+          }
+        }
+      } else {
+        if (!payload.name || typeof payload.name !== 'string') {
+          return { valid: false, error: 'Missing file name' };
+        }
+        if (typeof payload.size !== 'number' || payload.size <= 0) {
+          return { valid: false, error: 'Invalid file size' };
+        }
       }
       break;
 

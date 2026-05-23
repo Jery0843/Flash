@@ -4,7 +4,7 @@ import { useSignaling } from '../hooks/useSignaling';
 import { ApprovalModal } from '../components/ApprovalModal';
 import { StatusIndicator } from '../components/StatusIndicator';
 import { MSG, ROOM_STATES } from '../lib/constants';
-import { validateRoomCode, sanitizePassword, validateFileMetadata } from '../lib/sanitize';
+import { validateRoomCode, sanitizePassword, validateFileMetadata, validateFileManifest } from '../lib/sanitize';
 import './JoinRoom.css';
 
 export function JoinRoom() {
@@ -30,11 +30,26 @@ export function JoinRoom() {
         setJoining(false);
       }),
       signaling.on(MSG.FILE_METADATA, (data) => {
-        const validation = validateFileMetadata(data);
-        if (validation.valid) {
-          setFileMetadata(data);
+        // Support both manifest ({files: [...]}) and legacy single-file
+        if (data.files && Array.isArray(data.files)) {
+          const validation = validateFileManifest(data);
+          if (validation.valid) {
+            setFileMetadata(data);
+          } else {
+            setError(`Invalid files: ${validation.error}`);
+          }
         } else {
-          setError(`Invalid file: ${validation.error}`);
+          const validation = validateFileMetadata(data);
+          if (validation.valid) {
+            // Wrap legacy single-file into manifest format
+            setFileMetadata({
+              files: [data],
+              totalFiles: 1,
+              totalSize: data.size,
+            });
+          } else {
+            setError(`Invalid file: ${validation.error}`);
+          }
         }
       }),
       signaling.on(MSG.ROOM_ERROR, (data) => {
@@ -111,9 +126,9 @@ export function JoinRoom() {
     <div className="join-room-page">
       <div className="page-header">
         <Link to="/" className="page-back">← Back to home</Link>
-        <h1 className="page-title">Receive a File</h1>
+        <h1 className="page-title">Receive Files</h1>
         <p className="page-subtitle">
-          Enter the room code shared by the sender to receive a file.
+          Enter the room code shared by the sender to receive files.
         </p>
       </div>
 

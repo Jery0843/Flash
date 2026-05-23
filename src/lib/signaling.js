@@ -25,6 +25,7 @@ export class SignalingClient {
     this.pingInterval = null;
     this.lastQueryParams = {};
     this.lastQueryKey = '';
+    this.connectionVersion = 0;
   }
 
   /**
@@ -49,35 +50,53 @@ export class SignalingClient {
       this.lastQueryKey = nextQueryKey;
       this.intentionalClose = false;
 
+      let socket;
+      let connectionSettled = false;
+      const connectionVersion = ++this.connectionVersion;
+
       try {
         const urlObj = new URL(this.url);
         for (const [k, v] of Object.entries(normalizedParams)) {
           urlObj.searchParams.set(k, v);
         }
-        this.ws = new WebSocket(urlObj.toString());
-        this.ws.binaryType = 'arraybuffer';
+        socket = new WebSocket(urlObj.toString());
+        socket.binaryType = 'arraybuffer';
+        this.ws = socket;
       } catch {
         reject(new Error('Failed to create WebSocket connection'));
         return;
       }
 
-      this.ws.onopen = () => {
+      socket.onopen = () => {
+        if (socket !== this.ws || connectionVersion !== this.connectionVersion) return;
+        connectionSettled = true;
         this.reconnectAttempts = 0;
         this._startPing();
         resolve();
       };
 
-      this.ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (socket !== this.ws || connectionVersion !== this.connectionVersion) return;
         this._handleMessage(event.data);
       };
 
-      this.ws.onclose = (event) => {
-        const shouldEmitDisconnect = !this.suppressNextDisconnectEvent;
-        this.suppressNextDisconnectEvent = false;
-        this._stopPing();
-        this.ws = null;
+      socket.onclose = (event) => {
+        const isCurrentSocket = socket === this.ws && connectionVersion === this.connectionVersion;
+        const shouldEmitDisconnect = isCurrentSocket && !this.suppressNextDisconnectEvent;
+
+        if (isCurrentSocket) {
+          this.suppressNextDisconnectEvent = false;
+          this._stopPing();
+          this.ws = null;
+        }
+
+        if (!connectionSettled && isCurrentSocket) {
+          connectionSettled = true;
+          reject(new Error(event.reason || 'WebSocket connection closed'));
+        }
 
         const shouldReconnect =
+          isCurrentSocket &&
           !this.intentionalClose &&
           !this._isTerminalCloseCode(event.code) &&
           this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS;
@@ -93,7 +112,9 @@ export class SignalingClient {
         }
       };
 
-      this.ws.onerror = () => {
+      socket.onerror = () => {
+        if (socket !== this.ws || connectionVersion !== this.connectionVersion || connectionSettled) return;
+        connectionSettled = true;
         reject(new Error('WebSocket connection failed'));
       };
     });
@@ -182,6 +203,7 @@ export class SignalingClient {
     this.roomCode = null;
     this.lastQueryParams = {};
     this.lastQueryKey = '';
+    this.connectionVersion = 0;
   }
 
   get connected() {

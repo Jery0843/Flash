@@ -170,7 +170,7 @@
 @media (max-width: 768px) {
   .home-actions { flex-direction: column; gap: var(--space-4); }
   .home-actions .btn { width: 100%; min-width: unset; height: 80px; font-size: 1.8rem; }
-  .home-title { -webkit-text-stroke: 1px rgba(255, 255, 255, 0.2); }
+  .home-title { font-size: clamp(4rem, 20vw, 8rem); -webkit-text-stroke: 1px rgba(255, 255, 255, 0.2); }
 }
 
 .home-copyright {
@@ -184,4 +184,8 @@
   animation: fadeInUp 1s 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   opacity: 0;
   text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 768px) {
+  .home-copyright { bottom: var(--space-4); font-size: 0.7rem; }
 }

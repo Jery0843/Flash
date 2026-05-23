@@ -244,3 +244,13 @@
   color: var(--text-tertiary);
   margin-top: var(--space-2);
 }
+
+@media (max-width: 768px) {
+  .transfer-room-page { padding: var(--space-6) var(--space-4); }
+  .transfer-header { flex-direction: column; gap: var(--space-4); text-align: center; align-items: center; }
+  .transfer-header-left h1 { font-size: 2rem; }
+  .transfer-file-icon { font-size: 2.5rem; }
+  .transfer-controls { flex-direction: column; width: 100%; }
+  .transfer-controls .btn { width: 100%; }
+  .transfer-complete-title, .transfer-failed-title { font-size: 2rem; }
+}

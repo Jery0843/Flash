@@ -155,8 +155,9 @@
 }
 
 @media (max-width: 768px) {
-  .join-code-input {
-    font-size: 2rem;
-    max-width: 100%;
-  }
+  .join-room-page { padding: var(--space-6) var(--space-4); margin: 5vh auto 0; }
+  .join-code-section { padding: var(--space-6) var(--space-4); }
+  .join-code-input { font-size: 2rem; max-width: 100%; padding: var(--space-4) var(--space-2); }
+  .join-waiting { padding: var(--space-6) var(--space-4); }
+  .join-waiting-text { font-size: 1.2rem; }
 }

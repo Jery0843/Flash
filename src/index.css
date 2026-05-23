@@ -215,3 +215,9 @@ button, input { font-family: inherit; border: none; outline: none; background: n
 ::-webkit-scrollbar-track { background: #000; }
 ::-webkit-scrollbar-thumb { background: var(--accent-secondary); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
+
+@media (max-width: 768px) {
+  .container { padding: 0 var(--space-4); }
+  .btn { padding: var(--space-3) var(--space-6); font-size: 1rem; }
+  .glass-card { border-radius: 20px; padding: var(--space-6); }
+}

@@ -178,3 +178,10 @@
 .btn-danger:hover::before { opacity: 0.3; }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 768px) {
+  .approval-modal { padding: var(--space-6) var(--space-4); border-radius: 20px; }
+  .approval-title { font-size: 1.5rem; }
+  .approval-actions { flex-direction: column; }
+  .approval-actions .btn { width: 100%; }
+}

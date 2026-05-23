@@ -70,10 +70,11 @@ export function CreateRoom() {
     setCreating(true);
     setError(null);
     try {
-      await signaling.connect();
-      signaling.send(MSG.CREATE_ROOM, {
+      await signaling.connect({
+        action: 'create',
         password: usePassword ? sanitizePassword(password) : undefined,
       });
+      // Do not send MSG.CREATE_ROOM via JSON, the server handles it on connect via URL params.
     } catch (err) {
       setError(err.message || 'Failed to connect');
       setCreating(false);

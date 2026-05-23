@@ -15,10 +15,10 @@ export function useSignaling() {
     };
   }, []);
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (params) => {
     try {
       setError(null);
-      await clientRef.current.connect();
+      await clientRef.current.connect(params);
       setConnected(true);
     } catch (err) {
       setError(err.message);

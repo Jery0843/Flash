@@ -27,15 +27,23 @@ export class SignalingClient {
    * Connect to the signaling server.
    * Returns a promise that resolves when connected.
    */
-  connect() {
+  connect(queryParams = {}) {
     return new Promise((resolve, reject) => {
       if (this.ws?.readyState === WebSocket.OPEN) {
         resolve();
         return;
       }
 
+      this.lastQueryParams = queryParams;
+
       try {
-        this.ws = new WebSocket(this.url);
+        const urlObj = new URL(this.url);
+        for (const [k, v] of Object.entries(queryParams)) {
+          if (v !== undefined && v !== null && v !== '') {
+            urlObj.searchParams.set(k, v);
+          }
+        }
+        this.ws = new WebSocket(urlObj.toString());
         this.ws.binaryType = 'arraybuffer';
       } catch (err) {
         reject(new Error('Failed to create WebSocket connection'));
@@ -57,7 +65,7 @@ export class SignalingClient {
         if (!this.intentionalClose && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           this.reconnectAttempts++;
           const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000);
-          setTimeout(() => this.connect().catch(() => {}), delay);
+          setTimeout(() => this.connect(this.lastQueryParams).catch(() => {}), delay);
         }
         this._emit('disconnected', { code: event.code, reason: event.reason });
       };

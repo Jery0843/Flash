@@ -63,11 +63,12 @@ export function JoinRoom() {
     setJoining(true);
     setError(null);
     try {
-      await signaling.connect();
-      signaling.send(MSG.JOIN_ROOM, {
-        roomCode: cleanCode,
+      await signaling.connect({
+        action: 'join',
+        code: cleanCode,
         password: password ? sanitizePassword(password) : undefined,
       });
+      // Server responds with MSG.ROOM_JOINED or error upon connect
     } catch (err) {
       setError(err.message || 'Failed to connect');
       setJoining(false);

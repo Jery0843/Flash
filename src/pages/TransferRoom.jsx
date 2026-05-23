@@ -26,6 +26,7 @@ export function TransferRoom() {
   const [roomStatus, setRoomStatus] = useState(ROOM_STATES.NEGOTIATING);
   const [error, setError] = useState(null);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const downloadButtonRef = useRef(null);
   const isSender = role === 'sender';
   const hasStartedRef = useRef(false);
   const displayRoomStatus = fileTransfer.transferState === 'completed' ? ROOM_STATES.COMPLETED : roomStatus;
@@ -433,6 +434,7 @@ export function TransferRoom() {
                       ) : (
                         <motion.button
                           key="all"
+                          ref={downloadButtonRef}
                           className="btn btn-primary btn-lg"
                           onClick={() => setShowDownloadModal(true)}
                           id="download-all-btn"
@@ -575,6 +577,7 @@ export function TransferRoom() {
           setShowDownloadModal(false);
         }}
         fileCount={fileTransfer.receivedFiles.length}
+        buttonRef={downloadButtonRef}
       />
     </motion.div>
   );

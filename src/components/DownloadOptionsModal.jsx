@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Package, Download } from 'lucide-react';
 import './DownloadOptionsModal.css';
 
-export function DownloadOptionsModal({ isOpen, onClose, onDownloadZip, onDownloadIndividual, fileCount }) {
+export function DownloadOptionsModal({ isOpen, onClose, onDownloadZip, onDownloadIndividual, fileCount, buttonRef }) {
   if (!isOpen) return null;
 
   return (
@@ -20,6 +20,14 @@ export function DownloadOptionsModal({ isOpen, onClose, onDownloadZip, onDownloa
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.9, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
+          style={{
+            position: buttonRef ? 'absolute' : 'relative',
+            ...(buttonRef && {
+              top: buttonRef.current ? buttonRef.current.getBoundingClientRect().bottom + 10 : 'auto',
+              left: buttonRef.current ? buttonRef.current.getBoundingClientRect().left : 'auto',
+              transform: buttonRef.current ? 'none' : undefined,
+            })
+          }}
         >
           <h2 className="download-options-title">
             Download {fileCount} {fileCount === 1 ? 'File' : 'Files'}

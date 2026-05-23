@@ -22,6 +22,7 @@
   width: 100%;
   box-shadow: 0 0 60px rgba(0, 243, 255, 0.15);
   text-align: center;
+  position: relative;
 }
 
 .download-options-title {

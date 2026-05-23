@@ -18,9 +18,12 @@ export class SignalingClient {
     this.listeners = new Map();
     this.reconnectAttempts = 0;
     this.intentionalClose = false;
+    this.suppressNextDisconnectEvent = false;
     this.token = null;
     this.roomCode = null;
     this.pingInterval = null;
+    this.lastQueryParams = {};
+    this.lastQueryKey = '';
   }
 
   /**
@@ -29,23 +32,30 @@ export class SignalingClient {
    */
   connect(queryParams = {}) {
     return new Promise((resolve, reject) => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
+      const normalizedParams = this._normalizeQueryParams(queryParams);
+      const nextQueryKey = this._getQueryKey(normalizedParams);
+
+      if (this.ws?.readyState === WebSocket.OPEN && this.lastQueryKey === nextQueryKey) {
         resolve();
         return;
       }
 
-      this.lastQueryParams = queryParams;
+      if (this.ws && this.lastQueryKey !== nextQueryKey) {
+        this._closeSocket({ intentional: true, suppressDisconnectEvent: true, reason: 'Switching rooms' });
+      }
+
+      this.lastQueryParams = normalizedParams;
+      this.lastQueryKey = nextQueryKey;
+      this.intentionalClose = false;
 
       try {
         const urlObj = new URL(this.url);
-        for (const [k, v] of Object.entries(queryParams)) {
-          if (v !== undefined && v !== null && v !== '') {
-            urlObj.searchParams.set(k, v);
-          }
+        for (const [k, v] of Object.entries(normalizedParams)) {
+          urlObj.searchParams.set(k, v);
         }
         this.ws = new WebSocket(urlObj.toString());
         this.ws.binaryType = 'arraybuffer';
-      } catch (err) {
+      } catch {
         reject(new Error('Failed to create WebSocket connection'));
         return;
       }
@@ -61,13 +71,20 @@ export class SignalingClient {
       };
 
       this.ws.onclose = (event) => {
+        const shouldEmitDisconnect = !this.suppressNextDisconnectEvent;
+        this.suppressNextDisconnectEvent = false;
         this._stopPing();
+        this.ws = null;
+
         if (!this.intentionalClose && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           this.reconnectAttempts++;
           const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000);
           setTimeout(() => this.connect(this.lastQueryParams).catch(() => {}), delay);
         }
-        this._emit('disconnected', { code: event.code, reason: event.reason });
+
+        if (shouldEmitDisconnect) {
+          this._emit('disconnected', { code: event.code, reason: event.reason });
+        }
       };
 
       this.ws.onerror = () => {
@@ -86,7 +103,6 @@ export class SignalingClient {
       return false;
     }
 
-    // Validate message type exists in our protocol
     const validTypes = Object.values(MSG);
     if (!validTypes.includes(type)) {
       console.error('[Signaling] Unknown message type:', type);
@@ -100,7 +116,6 @@ export class SignalingClient {
       timestamp: Date.now(),
     });
 
-    // Size limit on signaling payloads (16 KB)
     if (message.length > 16384) {
       console.error('[Signaling] Message too large:', message.length);
       return false;
@@ -141,13 +156,12 @@ export class SignalingClient {
    * Close the connection.
    */
   disconnect() {
-    this.intentionalClose = true;
-    this._stopPing();
-    if (this.ws) {
-      this.ws.close(1000, 'Client disconnect');
-      this.ws = null;
-    }
+    this._closeSocket({ intentional: true, suppressDisconnectEvent: false, reason: 'Client disconnect' });
     this.listeners.clear();
+    this.token = null;
+    this.roomCode = null;
+    this.lastQueryParams = {};
+    this.lastQueryKey = '';
   }
 
   get connected() {
@@ -157,7 +171,6 @@ export class SignalingClient {
   // ── Private Methods ────────────────────────────────────
 
   _handleMessage(data) {
-    // Handle binary messages (WS relay chunks)
     if (data instanceof ArrayBuffer) {
       this._emit(MSG.WS_RELAY_CHUNK, data);
       return;
@@ -172,10 +185,8 @@ export class SignalingClient {
         return;
       }
 
-      // Handle pong silently
       if (type === MSG.PONG) return;
 
-      // Store token and room code from room creation/join
       if (type === MSG.ROOM_CREATED) {
         this.token = payload.token;
         this.roomCode = payload.roomCode;
@@ -208,6 +219,31 @@ export class SignalingClient {
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
+    }
+  }
+
+  _normalizeQueryParams(queryParams) {
+    return Object.fromEntries(
+      Object.entries(queryParams).filter(([, value]) => value !== undefined && value !== null && value !== '')
+    );
+  }
+
+  _getQueryKey(queryParams) {
+    return JSON.stringify(Object.entries(queryParams).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
+  _closeSocket({ intentional, suppressDisconnectEvent, reason }) {
+    this.intentionalClose = intentional;
+    this.suppressNextDisconnectEvent = suppressDisconnectEvent;
+    this._stopPing();
+
+    if (this.ws) {
+      try {
+        this.ws.close(1000, reason);
+      } catch {
+        // Ignore close errors during reconnect/cleanup.
+      }
+      this.ws = null;
     }
   }
 }

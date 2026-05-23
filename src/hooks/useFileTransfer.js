@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import JSZip from 'jszip';
 import { FileSender, FileReceiver, createTransport, downloadBlob } from '../lib/fileTransfer';
 import { sanitizeFilename } from '../lib/sanitize';
 
@@ -113,6 +114,27 @@ export function useFileTransfer() {
     });
   }, [receivedFiles]);
 
+  const downloadAsZip = useCallback(async () => {
+    try {
+      const zip = new JSZip();
+      
+      // Add all files to the zip
+      receivedFiles.forEach((file) => {
+        zip.file(file.name, file.blob);
+      });
+      
+      // Generate the zip file
+      const content = await zip.generateAsync({ type: 'blob' });
+      
+      // Download the zip
+      const timestamp = new Date().toISOString().slice(0, 10);
+      downloadBlob(content, `flash-files-${timestamp}.zip`);
+    } catch (err) {
+      console.error('[FileTransfer] ZIP creation failed:', err);
+      throw err;
+    }
+  }, [receivedFiles]);
+
   const reset = useCallback(() => {
     senderRef.current = null;
     receiverRef.current = null;
@@ -134,6 +156,7 @@ export function useFileTransfer() {
     cancel,
     download,
     downloadAll,
+    downloadAsZip,
     reset,
   };
 }

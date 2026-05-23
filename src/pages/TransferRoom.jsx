@@ -7,6 +7,7 @@ import { TransferProgress } from '../components/TransferProgress';
 import { TransferStats } from '../components/TransferStats';
 import { FilePreview } from '../components/FilePreview';
 import { SEO } from '../components/SEO';
+import { DownloadOptionsModal } from '../components/DownloadOptionsModal';
 import { useSignaling } from '../hooks/useSignaling';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useFileTransfer } from '../hooks/useFileTransfer';
@@ -24,6 +25,7 @@ export function TransferRoom() {
 
   const [roomStatus, setRoomStatus] = useState(ROOM_STATES.NEGOTIATING);
   const [error, setError] = useState(null);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
   const isSender = role === 'sender';
   const hasStartedRef = useRef(false);
   const displayRoomStatus = fileTransfer.transferState === 'completed' ? ROOM_STATES.COMPLETED : roomStatus;
@@ -432,7 +434,7 @@ export function TransferRoom() {
                         <motion.button
                           key="all"
                           className="btn btn-primary btn-lg"
-                          onClick={fileTransfer.downloadAll}
+                          onClick={() => setShowDownloadModal(true)}
                           id="download-all-btn"
                           whileHover={{ scale: 1.05, boxShadow: '0 0 40px rgba(0, 243, 255, 0.5)' }}
                           whileTap={{ scale: 0.95 }}
@@ -555,6 +557,25 @@ export function TransferRoom() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <DownloadOptionsModal
+        isOpen={showDownloadModal}
+        onClose={() => setShowDownloadModal(false)}
+        onDownloadZip={async () => {
+          try {
+            await fileTransfer.downloadAsZip();
+            setShowDownloadModal(false);
+          } catch (err) {
+            console.error('ZIP download failed:', err);
+            setError('Failed to create ZIP file');
+          }
+        }}
+        onDownloadIndividual={() => {
+          fileTransfer.downloadAll();
+          setShowDownloadModal(false);
+        }}
+        fileCount={fileTransfer.receivedFiles.length}
+      />
     </motion.div>
   );
 }

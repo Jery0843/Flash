@@ -1,21 +1,21 @@
 .theme-toggle {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
-  background: var(--bg-tertiary);
+  border-radius: 100px;
+  background: transparent;
   border: 1px solid var(--border-primary);
   color: var(--text-secondary);
-  font-size: 1.15rem;
-  transition: all var(--transition-fast);
+  font-size: 1.25rem;
+  transition: all var(--transition-bounce);
   cursor: pointer;
 }
 
 .theme-toggle:hover {
-  background: var(--bg-glass-hover);
-  border-color: var(--border-hover);
-  color: var(--text-primary);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
   transform: rotate(15deg);
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
 }

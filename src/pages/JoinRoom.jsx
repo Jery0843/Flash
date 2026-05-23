@@ -21,13 +21,15 @@ export function JoinRoom() {
   const [error, setError] = useState(null);
   const [fileMetadata, setFileMetadata] = useState(null);
   const [roomStatus, setRoomStatus] = useState(null);
+  const [peerId, setPeerId] = useState(null);
 
   // Listen for signaling events
   useEffect(() => {
     if (!signaling.client) return;
 
     const cleanups = [
-      signaling.on(MSG.ROOM_JOINED, () => {
+      signaling.on(MSG.ROOM_JOINED, (data) => {
+        setPeerId(data.peerId);
         setRoomStatus(ROOM_STATES.RECEIVER_JOINED);
         setJoining(false);
       }),
@@ -108,9 +110,9 @@ export function JoinRoom() {
     setTimeout(sendAccept, 800);
 
     navigate(`/room/${roomCode}`, {
-      state: { role: 'receiver', roomCode, fileMetadata },
+      state: { role: 'receiver', roomCode, fileMetadata, peerId },
     });
-  }, [signaling, code, fileMetadata, navigate]);
+  }, [signaling, code, fileMetadata, peerId, navigate]);
 
   const handleReject = useCallback(() => {
     signaling.send(MSG.TRANSFER_REJECT);
@@ -194,7 +196,7 @@ export function JoinRoom() {
             autoFocus
             disabled={joining || roomStatus === ROOM_STATES.RECEIVER_JOINED}
             id="join-code-input"
-            whileFocus={{ scale: 1.02, boxShadow: '0 0 30px var(--accent-glow)' }}
+            whileFocus={{ scale: 1.02, boxShadow: '0 0 30px rgba(0, 243, 255, 0.5)' }}
             transition={{ duration: 0.2 }}
           />
         </div>
@@ -224,7 +226,7 @@ export function JoinRoom() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.1 }}
-                whileFocus={{ boxShadow: '0 0 30px var(--accent-glow)' }}
+                whileFocus={{ boxShadow: '0 0 30px rgba(0, 243, 255, 0.5)' }}
               />
             </motion.div>
           )}
@@ -241,7 +243,7 @@ export function JoinRoom() {
             onClick={joinRoom}
             disabled={code.length !== 6 || joining || roomStatus === ROOM_STATES.RECEIVER_JOINED}
             id="join-room-btn"
-            whileHover={{ scale: 1.02, boxShadow: '0 0 40px var(--accent-glow)' }}
+            whileHover={{ scale: 1.02, boxShadow: '0 0 40px rgba(0, 243, 255, 0.5)' }}
             whileTap={{ scale: 0.98 }}
             animate={joining ? { scale: [1, 0.98, 1] } : {}}
             transition={joining ? { duration: 1, repeat: Infinity } : {}}

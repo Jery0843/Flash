@@ -254,7 +254,7 @@ export function CreateRoom() {
                 onClick={createRoom}
                 disabled={files.length === 0 || creating}
                 id="create-room-btn"
-                whileHover={{ scale: 1.02, boxShadow: '0 0 40px var(--accent-glow)' }}
+                whileHover={{ scale: 1.02, boxShadow: '0 0 40px rgba(0, 243, 255, 0.5)' }}
                 whileTap={{ scale: 0.98 }}
                 animate={creating ? { scale: [1, 0.98, 1] } : {}}
                 transition={creating ? { duration: 1, repeat: Infinity } : {}}

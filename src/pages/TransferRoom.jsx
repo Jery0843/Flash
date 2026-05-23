@@ -15,7 +15,7 @@ import './TransferRoom.css';
 export function TransferRoom() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, files: senderFiles, fileMetadata: initialMetadata } = location.state || {};
+  const { role, files: senderFiles, fileMetadata: initialMetadata, peerId } = location.state || {};
 
   const signaling = useSignaling();
   const webrtc = useWebRTC();
@@ -91,15 +91,34 @@ export function TransferRoom() {
 
         // Listen for incoming signaling messages
         signaling.on(MSG.SDP_OFFER, async (data) => {
+          // For receivers, only process offers targeted to this peer
+          if (!isSender && peerId && data.targetPeerId !== peerId) {
+            console.log('[TransferRoom] Ignoring SDP offer for different peer:', data.targetPeerId, 'my peerId:', peerId);
+            return;
+          }
           const answer = await manager.handleOffer(data.sdp);
           signaling.send(MSG.SDP_ANSWER, { sdp: answer });
         });
 
         signaling.on(MSG.SDP_ANSWER, async (data) => {
+          // For senders, only process answers from the expected peer
+          if (isSender && peerId && data.peerId !== peerId) {
+            console.log('[TransferRoom] Ignoring SDP answer from different peer:', data.peerId, 'my peerId:', peerId);
+            return;
+          }
           await manager.handleAnswer(data.sdp);
         });
 
         signaling.on(MSG.ICE_CANDIDATE, async (data) => {
+          // Filter ICE candidates by peerId
+          if (!isSender && peerId && data.targetPeerId !== peerId) {
+            console.log('[TransferRoom] Ignoring ICE candidate for different peer:', data.targetPeerId, 'my peerId:', peerId);
+            return;
+          }
+          if (isSender && peerId && data.peerId !== peerId) {
+            console.log('[TransferRoom] Ignoring ICE candidate from different peer:', data.peerId, 'my peerId:', peerId);
+            return;
+          }
           await manager.addIceCandidate(data.candidate);
         });
 
@@ -300,7 +319,7 @@ export function TransferRoom() {
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    whileHover={{ scale: 1.05, boxShadow: '0 0 30px var(--accent-glow)' }}
+                    whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(0, 243, 255, 0.5)' }}
                     whileTap={{ scale: 0.95 }}
                   >
                     <Play size={18} className="mr-2" />
@@ -384,7 +403,7 @@ export function TransferRoom() {
                           className="btn btn-primary btn-lg"
                           onClick={() => fileTransfer.download(0)}
                           id="download-btn"
-                          whileHover={{ scale: 1.05, boxShadow: '0 0 40px var(--accent-glow)' }}
+                          whileHover={{ scale: 1.05, boxShadow: '0 0 40px rgba(0, 243, 255, 0.5)' }}
                           whileTap={{ scale: 0.95 }}
                         >
                           <Download size={20} className="mr-2" />
@@ -396,7 +415,7 @@ export function TransferRoom() {
                           className="btn btn-primary btn-lg"
                           onClick={fileTransfer.downloadAll}
                           id="download-all-btn"
-                          whileHover={{ scale: 1.05, boxShadow: '0 0 40px var(--accent-glow)' }}
+                          whileHover={{ scale: 1.05, boxShadow: '0 0 40px rgba(0, 243, 255, 0.5)' }}
                           whileTap={{ scale: 0.95 }}
                         >
                           <Download size={20} className="mr-2" />

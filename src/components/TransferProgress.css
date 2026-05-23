@@ -6,38 +6,43 @@
 .progress-bar-outer {
   width: 100%;
   height: 12px;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 100px;
   overflow: hidden;
   position: relative;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
 }
 
 .progress-bar-inner {
   height: 100%;
-  background: var(--gradient-progress);
+  background: var(--gradient-neon);
   background-size: 200% 100%;
   animation: gradientShift 3s ease infinite;
-  border-radius: var(--radius-full);
+  border-radius: 100px;
   transition: width 0.3s ease-out;
   min-width: 2%;
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
 }
 
 .progress-bar-inner.complete {
   background: var(--success);
   animation: none;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
 }
 
 .progress-labels {
   display: flex;
   justify-content: space-between;
   margin-top: var(--space-2);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-weight: 600;
 }
 
 .progress-percentage {
-  font-weight: 700;
+  font-weight: 800;
   font-family: var(--font-mono);
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }

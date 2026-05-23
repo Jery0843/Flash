@@ -1,9 +1,9 @@
 .file-preview {
   margin-top: var(--space-4);
-  border-radius: var(--radius-lg);
+  border-radius: 20px;
   overflow: hidden;
   border: 1px solid var(--border-primary);
-  background: var(--bg-tertiary);
+  background: transparent;
   animation: fadeIn var(--transition-base) ease-out;
 }
 
@@ -26,15 +26,18 @@
 
 .file-preview-generic-icon {
   font-size: 3rem;
+  filter: drop-shadow(0 0 20px rgba(0, 243, 255, 0.4));
 }
 
 .file-preview-generic-name {
-  font-weight: 600;
+  font-weight: 800;
+  font-family: var(--font-mono);
   color: var(--text-primary);
   word-break: break-all;
 }
 
 .file-preview-generic-type {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
+  font-family: var(--font-mono);
 }

@@ -8,56 +8,69 @@
 
 .stat-item {
   text-align: center;
-  padding: var(--space-3) var(--space-2);
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-3);
+  background: transparent;
+  border-radius: 20px;
   border: 1px solid var(--border-primary);
+  transition: all var(--transition-bounce);
+}
+
+.stat-item:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
 }
 
 .stat-label {
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-family: var(--font-heading);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
   color: var(--text-tertiary);
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
 }
 
 .stat-value {
   font-family: var(--font-mono);
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 800;
   color: var(--text-primary);
 }
 
-.stat-value.speed { color: var(--accent-primary); }
-.stat-value.eta { color: var(--accent-secondary); }
+.stat-value.speed { color: var(--accent-primary); text-shadow: 0 0 10px rgba(0, 243, 255, 0.5); }
+.stat-value.eta { color: var(--accent-secondary); text-shadow: 0 0 10px rgba(189, 0, 255, 0.5); }
 
 .connection-type-badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
   margin-top: var(--space-3);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full);
-  font-size: 0.72rem;
-  font-weight: 600;
-  background: var(--bg-tertiary);
+  padding: var(--space-2) var(--space-4);
+  border-radius: 100px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: transparent;
   color: var(--text-secondary);
   border: 1px solid var(--border-primary);
 }
 
 .connection-type-badge[data-type="direct"] {
   color: var(--success);
-  border-color: rgba(52, 211, 153, 0.2);
+  border-color: rgba(0, 255, 136, 0.3);
+  box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
 }
 .connection-type-badge[data-type="relay"] {
   color: var(--accent-primary);
-  border-color: rgba(56, 189, 248, 0.2);
+  border-color: rgba(0, 243, 255, 0.3);
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
 }
 .connection-type-badge[data-type="ws-relay"] {
-  color: var(--warning);
-  border-color: rgba(251, 191, 36, 0.2);
+  color: var(--accent-tertiary);
+  border-color: rgba(255, 0, 85, 0.3);
+  box-shadow: 0 0 15px rgba(255, 0, 85, 0.2);
 }
 
 @media (max-width: 480px) {

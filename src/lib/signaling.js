@@ -76,7 +76,12 @@ export class SignalingClient {
         this._stopPing();
         this.ws = null;
 
-        if (!this.intentionalClose && this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        const shouldReconnect =
+          !this.intentionalClose &&
+          !this._isTerminalCloseCode(event.code) &&
+          this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS;
+
+        if (shouldReconnect) {
           this.reconnectAttempts++;
           const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000);
           setTimeout(() => this.connect(this.lastQueryParams).catch(() => {}), delay);
@@ -230,6 +235,10 @@ export class SignalingClient {
 
   _getQueryKey(queryParams) {
     return JSON.stringify(Object.entries(queryParams).sort(([a], [b]) => a.localeCompare(b)));
+  }
+
+  _isTerminalCloseCode(code) {
+    return code >= 4000 && code < 5000;
   }
 
   _closeSocket({ intentional, suppressDisconnectEvent, reason }) {

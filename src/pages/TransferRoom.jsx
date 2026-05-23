@@ -115,6 +115,11 @@ export function TransferRoom() {
     };
 
     setupWebRTC();
+
+    return () => {
+      webrtc.close();
+      signaling.disconnect();
+    };
   }, []);
 
   // Handle transfer completion — notify other peer

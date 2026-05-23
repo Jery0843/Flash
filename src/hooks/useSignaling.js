@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { SignalingClient } from '../lib/signaling';
+import { SignalingClient, getSignalingClient, resetSignalingClient } from '../lib/signaling';
 import { MSG, SIGNALING_URL } from '../lib/constants';
 
 export function useSignaling() {
@@ -8,11 +8,8 @@ export function useSignaling() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    clientRef.current = new SignalingClient(SIGNALING_URL);
-    return () => {
-      clientRef.current?.disconnect();
-      clientRef.current = null;
-    };
+    clientRef.current = getSignalingClient(SIGNALING_URL);
+    // Do not disconnect on unmount so the connection persists across route changes
   }, []);
 
   const connect = useCallback(async (params) => {

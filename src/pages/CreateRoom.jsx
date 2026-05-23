@@ -153,15 +153,7 @@ export function CreateRoom() {
           </motion.div>
         </Link>
         <h1 className="page-title">
-          <motion.span
-            animate={{ 
-              background: ['linear-gradient(135deg, #38bdf8, #818cf8)', 'linear-gradient(135deg, #818cf8, #c084fc)', 'linear-gradient(135deg, #38bdf8, #818cf8)']
-            }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-            style={{ backgroundSize: '200% 200%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
-          >
-            Send Files
-          </motion.span>
+          Send Files
         </h1>
         <p className="page-subtitle">
           {roomCode

@@ -175,15 +175,7 @@ export function TransferRoom() {
         transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
       >
         <div className="transfer-header-left">
-          <motion.h1
-            animate={{ 
-              background: ['linear-gradient(135deg, #38bdf8, #818cf8)', 'linear-gradient(135deg, #818cf8, #c084fc)', 'linear-gradient(135deg, #38bdf8, #818cf8)']
-            }}
-            transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-            style={{ backgroundSize: '200% 200%', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
-          >
-            {isSender ? 'Sending Files' : 'Receiving Files'}
-          </motion.h1>
+          <h1>{isSender ? 'Sending Files' : 'Receiving Files'}</h1>
         </div>
         <StatusIndicator status={displayRoomStatus} />
       </motion.div>

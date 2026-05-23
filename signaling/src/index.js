@@ -14,7 +14,7 @@
 // - No sensitive data in logs
 // ═══════════════════════════════════════════════════════════
 
-import { checkRateLimit } from './rateLimit.js';
+import { checkRateLimit, checkFailedJoinAttempts, recordFailedJoin, clearFailedJoins } from './rateLimit.js';
 
 // Re-export the Durable Object class
 export { SignalingRoom } from './room.js';
@@ -27,7 +27,7 @@ const CORS_HEADERS = {
 
 function generateRoomCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const array = new Uint8Array(6);
+  const array = new Uint8Array(8); // Increased from 6 to 8 for better security
   crypto.getRandomValues(array);
   return Array.from(array, b => chars[b % chars.length]).join('');
 }
@@ -133,12 +133,22 @@ export default {
 
       } else if (action === 'join') {
         const roomCode = url.searchParams.get('code');
-        if (!roomCode || !/^[A-Z2-9]{6}$/.test(roomCode)) {
+        if (!roomCode || !/^[A-Z2-9]{8}$/.test(roomCode)) {
+          recordFailedJoin(ip);
           return new Response('Invalid room code', { status: 400 });
         }
 
-        // Rate limit join attempts
-        const rateCheck = checkRateLimit(ip, 'join', 5);
+        // Check if IP is blocked due to too many failed join attempts
+        const blockCheck = checkFailedJoinAttempts(ip);
+        if (blockCheck.blocked) {
+          return new Response(JSON.stringify({ error: 'Too many failed join attempts. Try again later.' }), {
+            status: 429,
+            headers: { ...CORS_HEADERS, 'Retry-After': String(blockCheck.retryAfter) },
+          });
+        }
+
+        // Rate limit join attempts (stricter than create)
+        const rateCheck = checkRateLimit(ip, 'join', 10);
         if (!rateCheck.allowed) {
           return new Response(JSON.stringify({ error: 'Too many join attempts. Try again later.' }), {
             status: 429,
@@ -149,6 +159,10 @@ export default {
         // Route to the existing Durable Object for this room code
         const roomId = env.SIGNALING_ROOM.idFromName(roomCode);
         const room = env.SIGNALING_ROOM.get(roomId);
+        
+        // Clear failed join attempts on successful room access
+        clearFailedJoins(ip);
+        
         return room.fetch(request);
       }
 

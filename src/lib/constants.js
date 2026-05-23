@@ -10,7 +10,7 @@ export const MAX_FILE_SIZE = 25 * 1024 * 1024 * 1024; // 25 GB
 export const SPEED_WINDOW_MS = 3000; // Rolling 3s window for speed calc
 
 // ── Room Configuration ─────────────────────────────────────
-export const ROOM_CODE_LENGTH = 6;
+export const ROOM_CODE_LENGTH = 8; // Increased from 6 to 8 for better security (32^8 = 1.1 trillion combinations)
 export const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No 0/O/1/I confusion
 export const ROOM_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 export const MAX_RECONNECT_ATTEMPTS = 3;

@@ -95,7 +95,7 @@ export class SignalingClient {
 
     const message = JSON.stringify({
       type,
-      ...payload,
+      payload,
       token: this.token,
       timestamp: Date.now(),
     });
@@ -165,7 +165,7 @@ export class SignalingClient {
 
     try {
       const message = JSON.parse(data);
-      const { type, ...payload } = message;
+      const { type, payload = {} } = message;
 
       if (!type) {
         console.warn('[Signaling] Message missing type:', message);

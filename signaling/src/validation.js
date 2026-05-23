@@ -25,7 +25,7 @@ export function validateMessage(raw) {
     return { valid: false, error: 'Missing message type' };
   }
 
-  const { type, ...payload } = parsed;
+  const { type, payload = {} } = parsed;
 
   // Validate known message types
   const validTypes = Object.values(MSG);

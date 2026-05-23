@@ -61,8 +61,10 @@ export class SignalingRoom {
       // Send room created confirmation
       server.send(JSON.stringify({
         type: MSG.ROOM_CREATED,
-        roomCode: this.state.code,
-        token: roomCode, // Simple token in MVP
+        payload: {
+          roomCode: this.state.code,
+          token: roomCode, // Simple token in MVP
+        }
       }));
 
     } else if (action === 'join') {
@@ -70,7 +72,7 @@ export class SignalingRoom {
       if (this.state.password && password !== this.state.password) {
         server.send(JSON.stringify({
           type: MSG.ROOM_ERROR,
-          message: 'Incorrect room password',
+          payload: { message: 'Incorrect room password' }
         }));
         server.close(4001, 'Incorrect password');
         return new Response(null, { status: 101, webSocket: client });
@@ -80,7 +82,7 @@ export class SignalingRoom {
       if (this.state.status !== ROOM_STATES.WAITING) {
         server.send(JSON.stringify({
           type: MSG.ROOM_ERROR,
-          message: 'Room is not accepting new connections',
+          payload: { message: 'Room is not accepting new connections' }
         }));
         server.close(4002, 'Room not available');
         return new Response(null, { status: 101, webSocket: client });
@@ -91,7 +93,9 @@ export class SignalingRoom {
       // Notify receiver they joined
       server.send(JSON.stringify({
         type: MSG.ROOM_JOINED,
-        token: roomCode,
+        payload: {
+          token: roomCode,
+        }
       }));
 
       // Notify sender that receiver joined
@@ -99,6 +103,7 @@ export class SignalingRoom {
       for (const ws of senders) {
         ws.send(JSON.stringify({
           type: MSG.RECEIVER_JOINED,
+          payload: {}
         }));
       }
     }
@@ -182,7 +187,7 @@ export class SignalingRoom {
     if (tags?.includes('sender')) {
       this._broadcastAll(JSON.stringify({
         type: MSG.ROOM_ERROR,
-        message: 'Sender disconnected',
+        payload: { message: 'Sender disconnected' }
       }));
       this._cleanup();
     } else if (tags?.includes('receiver')) {
@@ -191,7 +196,7 @@ export class SignalingRoom {
       for (const s of senders) {
         s.send(JSON.stringify({
           type: MSG.ROOM_ERROR,
-          message: 'Receiver disconnected',
+          payload: { message: 'Receiver disconnected' }
         }));
       }
       this.state.status = ROOM_STATES.WAITING;
@@ -208,7 +213,7 @@ export class SignalingRoom {
     this.state.status = ROOM_STATES.EXPIRED;
     this._broadcastAll(JSON.stringify({
       type: MSG.ROOM_ERROR,
-      message: 'Room expired due to inactivity',
+      payload: { message: 'Room expired due to inactivity' }
     }));
     this._cleanup();
   }

@@ -105,8 +105,11 @@ export function useFileTransfer() {
   }, [receivedFiles]);
 
   const downloadAll = useCallback(() => {
-    receivedFiles.forEach((file) => {
-      downloadBlob(file.blob, file.name);
+    // Download files with delay to prevent browser blocking
+    receivedFiles.forEach((file, index) => {
+      setTimeout(() => {
+        downloadBlob(file.blob, file.name);
+      }, index * 500); // 500ms delay between each download
     });
   }, [receivedFiles]);
 

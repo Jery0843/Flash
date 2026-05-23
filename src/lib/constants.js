@@ -15,7 +15,7 @@ export const ROOM_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 export const MAX_RECONNECT_ATTEMPTS = 3;
 
 // ── Signaling Server ───────────────────────────────────────
-// Change this to your deployed Worker URL
+// Set via VITE_SIGNALING_URL and VITE_TURN_CREDENTIALS_URL env vars
 export const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL || 'ws://localhost:8787/ws';
 export const TURN_CREDENTIALS_URL = import.meta.env.VITE_TURN_CREDENTIALS_URL || 'http://localhost:8787/turn-credentials';
 

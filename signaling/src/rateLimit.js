@@ -36,15 +36,6 @@ export function checkRateLimit(ip, action, maxAttempts = MAX_ROOMS_PER_IP) {
   return { allowed: true };
 }
 
-// Clean up stale entries periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, timestamps] of ipActions) {
-    const valid = timestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
-    if (valid.length === 0) {
-      ipActions.delete(key);
-    } else {
-      ipActions.set(key, valid);
-    }
-  }
-}, 60000);
+// Note: No periodic cleanup needed in Cloudflare Workers.
+// Each Worker isolate has a short lifespan, so stale entries
+// are automatically garbage collected when the isolate recycles.

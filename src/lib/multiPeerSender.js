@@ -166,7 +166,15 @@ export class MultiPeerSender {
     const sig = this.signaling;
 
     off(sig.on(MSG.RECEIVER_JOINED, ({ peerId }) => {
-      if (!peerId || this.peers.has(peerId)) return;
+      if (!peerId) return;
+      
+      // If peer already exists (rejoin), clean up old state first
+      if (this.peers.has(peerId)) {
+        const existingPeer = this.peers.get(peerId);
+        existingPeer.webrtc?.close();
+        existingPeer.fileSender?.cancel();
+      }
+      
       this.peers.set(peerId, {
         status: 'pending-approval',
         progress: null,
@@ -242,6 +250,14 @@ export class MultiPeerSender {
       peer.webrtc?.close();
       peer.fileSender?.cancel();
       this._emit();
+    }));
+
+    // Handle resume requests from receivers
+    off(sig.on('file_resume_request', ({ fileIndex, resumeFromChunk }) => {
+      console.log(`[MultiPeerSender] Resume request for file ${fileIndex} from chunk ${resumeFromChunk}`);
+      // For now, we don't support mid-file resume in multi-peer scenario
+      // The receiver will just re-download from the beginning
+      // This is a limitation of the current architecture
     }));
   }
 }

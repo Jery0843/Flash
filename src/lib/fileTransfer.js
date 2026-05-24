@@ -417,10 +417,10 @@ export class FileSender {
 export class FileReceiver {
   /**
    * @param {object} manifest - { files: [{name, size, type, totalChunks}], totalSize, totalFiles }
-   * @param {object} [transport] - Optional transport for sending resume requests
+   * @param {object} [signaling] - Optional signaling client for sending resume requests
    * @param {string} [roomCode] - Optional room code for generating persistent fileIds
    */
-  constructor(manifest, transport = null, roomCode = null) {
+  constructor(manifest, signaling = null, roomCode = null) {
     this.manifest = manifest;
     this.totalSize = manifest.totalSize;
     this.totalFiles = manifest.totalFiles;
@@ -428,7 +428,7 @@ export class FileReceiver {
     this.tracker = new ProgressTracker(this.totalSize);
 
     // Resume support
-    this.transport = transport;
+    this.signaling = signaling;
     this.roomCode = roomCode;
     this.dbEnabled = false;
     this.currentFileId = null;
@@ -556,14 +556,13 @@ export class FileReceiver {
           this.tracker.update(Math.min(alreadyTransferred, this.currentFileMeta.size));
         }
 
-        // Send resume request to sender
+        // Send resume request to sender via signaling
         const resumeFromChunk = this.receivedChunkCount;
-        if (this.transport) {
-          this.transport.send(JSON.stringify({
-            ctrl: 'file_resume_request',
+        if (this.signaling && this.signaling.send) {
+          this.signaling.send('file_resume_request', {
             fileIndex: this.currentFileMeta.index,
             resumeFromChunk,
-          }));
+          });
         }
       }
     } catch (err) {
@@ -684,6 +683,14 @@ export function createTransport(channel) {
         channel.onbufferedamountlow = () => {
           listeners.get('buffer-low')?.forEach((cb) => cb());
         };
+      }
+
+      if (event === 'message') {
+        // Wire up data channel messages to the transport
+        const handler = (event) => {
+          listeners.get('message')?.forEach((cb) => cb(event.data));
+        };
+        channel.onmessage = handler;
       }
 
       return () => {

@@ -79,7 +79,7 @@ export function TransferRoom() {
             fileTransfer.startSending(senderFiles, manager.dataChannel);
           }
           if (!isSender && initialMetadata) {
-            fileTransfer.startReceiving(initialMetadata, manager.dataChannel, signaling.client, roomCode);
+            fileTransfer.startReceiving(initialMetadata, manager.dataChannel, signaling.client, roomCode, peerId);
           }
         });
 

@@ -174,7 +174,7 @@ export class FileSender {
           if (msg.ctrl === 'file_resume_request') {
             this._handleResumeRequest(msg);
           }
-        } catch (err) {
+        } catch (_) {
           // Ignore parse errors
         }
       }
@@ -219,6 +219,10 @@ export class FileSender {
   async start(resumeFromChunk = 0) {
     if (this._sending) return;
 
+    if (this._pendingResume) {
+      resumeFromChunk = this._pendingResume.resumeFromChunk;
+    }
+
     if (this.transport.setBufferThreshold) {
       this.transport.setBufferThreshold(BUFFER_LOW_WATER_MARK);
     }
@@ -247,6 +251,17 @@ export class FileSender {
     }
   }
 
+  setResumePosition(fileIndex, resumeFromChunk) {
+    console.log(`[FileSender] setResumePosition called for file ${fileIndex} from chunk ${resumeFromChunk}`);
+    if (fileIndex === this.currentFileIndex && this._sending) {
+      this.currentChunk = resumeFromChunk;
+      this._sending = false;
+      this._scheduleResume(0);
+    } else if (fileIndex < this.currentFileIndex || fileIndex > this.currentFileIndex) {
+      this._pendingResume = { fileIndex, resumeFromChunk };
+    }
+  }
+
   cancel() {
     this.cancelled = true;
     this.paused = false;
@@ -255,15 +270,22 @@ export class FileSender {
   }
 
   async _sendAllFiles(resumeFromChunk = 0) {
-    for (let i = 0; i < this.files.length; i++) {
+    let startFileIndex = 0;
+
+    if (this._pendingResume) {
+      startFileIndex = this._pendingResume.fileIndex;
+      resumeFromChunk = this._pendingResume.resumeFromChunk;
+      this._pendingResume = null;
+    }
+
+    for (let i = startFileIndex; i < this.files.length; i++) {
       if (this.cancelled) return;
 
       this.currentFileIndex = i;
       const file = this.files[i];
       this.totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
-      // Support resuming from a specific chunk
-      this.currentChunk = Math.min(resumeFromChunk, this.totalChunks);
+      this.currentChunk = (i === startFileIndex) ? Math.min(resumeFromChunk, this.totalChunks) : 0;
 
       // Send file_start control message
       this._sendControl({
@@ -419,8 +441,9 @@ export class FileReceiver {
    * @param {object} manifest - { files: [{name, size, type, totalChunks}], totalSize, totalFiles }
    * @param {object} [signaling] - Optional signaling client for sending resume requests
    * @param {string} [roomCode] - Optional room code for generating persistent fileIds
+   * @param {string} [peerId] - Optional peer ID for multi-peer resume requests
    */
-  constructor(manifest, signaling = null, roomCode = null) {
+  constructor(manifest, signaling = null, roomCode = null, peerId = null) {
     this.manifest = manifest;
     this.totalSize = manifest.totalSize;
     this.totalFiles = manifest.totalFiles;
@@ -430,6 +453,7 @@ export class FileReceiver {
     // Resume support
     this.signaling = signaling;
     this.roomCode = roomCode;
+    this.peerId = peerId;
     this.dbEnabled = false;
     this.currentFileId = null;
     this.pendingChunks = new Set();
@@ -560,6 +584,7 @@ export class FileReceiver {
         const resumeFromChunk = this.receivedChunkCount;
         if (this.signaling && this.signaling.send) {
           this.signaling.send('file_resume_request', {
+            peerId: this.peerId,
             fileIndex: this.currentFileMeta.index,
             resumeFromChunk,
           });

@@ -21,7 +21,7 @@ export class MultiPeerSender {
     this.files = files;
     this.manifest = manifest;
     this.onChange = typeof onChange === 'function' ? onChange : () => {};
-    this.peers = new Map(); // peerId -> peer object
+    this.peers = new Map();
     this._unsubs = [];
     this._closed = false;
     this._wire();
@@ -80,6 +80,9 @@ export class MultiPeerSender {
         const sender = new FileSender(this.files, transport);
         peer.fileSender = sender;
 
+        const pendingResume = peer.pendingResume;
+        peer.pendingResume = null;
+
         sender.onProgress = (s) => {
           peer.progress = s;
           this._emit();
@@ -95,7 +98,12 @@ export class MultiPeerSender {
           this._emit();
         };
 
-        sender.start();
+        if (pendingResume) {
+          sender._pendingResume = { fileIndex: pendingResume.fileIndex, resumeFromChunk: pendingResume.resumeFromChunk };
+          sender.start();
+        } else {
+          sender.start();
+        }
       });
 
       await webrtc.init(true);
@@ -253,11 +261,19 @@ export class MultiPeerSender {
     }));
 
     // Handle resume requests from receivers
-    off(sig.on('file_resume_request', ({ fileIndex, resumeFromChunk }) => {
-      console.log(`[MultiPeerSender] Resume request for file ${fileIndex} from chunk ${resumeFromChunk}`);
-      // For now, we don't support mid-file resume in multi-peer scenario
-      // The receiver will just re-download from the beginning
-      // This is a limitation of the current architecture
+    off(sig.on('file_resume_request', ({ peerId, fileIndex, resumeFromChunk }) => {
+      console.log(`[MultiPeerSender] Resume request from peer ${peerId} for file ${fileIndex} from chunk ${resumeFromChunk}`);
+      const peer = this.peers.get(peerId);
+      if (!peer) {
+        console.warn('[MultiPeerSender] Resume request from unknown peer:', peerId);
+        return;
+      }
+
+      if (peer.fileSender) {
+        peer.fileSender.setResumePosition(fileIndex, resumeFromChunk);
+      } else {
+        peer.pendingResume = { fileIndex, resumeFromChunk };
+      }
     }));
   }
 }

@@ -87,6 +87,14 @@ export function TransferRoom() {
               console.log('[TransferRoom] Rewiring sender data channel after reconnection');
               const sender = fileTransfer.senderRef.current;
               sender.transport = createTransport(manager.dataChannel);
+              
+              // Restart the pump if we were in the middle of sending
+              if (sender._currentPumpFile && !sender.cancelled) {
+                console.log('[TransferRoom] Restarting sender pump after reconnection');
+                sender._sending = false;
+                sender._clearResumeTimer();
+                sender._doPump();
+              }
             }
           }
           
@@ -106,6 +114,12 @@ export function TransferRoom() {
               if (receiver.currentFileMeta && receiver.currentFileId) {
                 console.log('[TransferRoom] Triggering resume after reconnection');
                 receiver.triggerResume();
+              } else if (receiver.receivedFiles.length === 0) {
+                // No files received yet and no current file - this might be initial connection
+                console.log('[TransferRoom] Receiver reconnected but no transfer state, waiting for file_start');
+              } else {
+                // We have received some files but no current file - might need to resume next file
+                console.log('[TransferRoom] Receiver reconnected, waiting for next file_start');
               }
             }
           }

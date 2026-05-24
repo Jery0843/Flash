@@ -259,10 +259,14 @@ export class FileSender {
     if (fileIndex === this.currentFileIndex) {
       this.currentChunk = resumeFromChunk;
       
-      // If we were in the middle of sending, restart the pump
-      if (this._sending) {
-        this._sending = false;
-        this._scheduleResume(0);
+      // Restart the pump regardless of current state
+      this._sending = false;
+      this._clearResumeTimer();
+      
+      // If we have an active pump promise, restart it
+      if (this._currentPumpFile) {
+        console.log('[FileSender] Restarting pump after resume request');
+        this._doPump();
       }
     } else {
       // Store for when _sendAllFiles gets to this file index
@@ -618,6 +622,21 @@ export class FileReceiver {
     if (this.currentFileId && this.currentFileMeta) {
       console.log('[FileReceiver] Manually triggering resume after reconnection');
       await this._tryResume();
+      
+      // Set a timeout to retry if no chunks arrive
+      if (this._resumeTimeout) {
+        clearTimeout(this._resumeTimeout);
+      }
+      
+      const lastChunkCount = this.receivedChunkCount;
+      this._resumeTimeout = setTimeout(() => {
+        // If we haven't received any new chunks in 5 seconds, try again
+        if (this.receivedChunkCount === lastChunkCount && 
+            this.receivedChunkCount < this.currentFileMeta.totalChunks) {
+          console.log('[FileReceiver] No chunks received after resume, retrying...');
+          this._tryResume();
+        }
+      }, 5000);
     }
   }
 
@@ -633,6 +652,12 @@ export class FileReceiver {
       }
 
       if (this.chunks[index]) return;
+
+      // Clear resume timeout since we're receiving chunks
+      if (this._resumeTimeout) {
+        clearTimeout(this._resumeTimeout);
+        this._resumeTimeout = null;
+      }
 
       this.chunks[index] = data;
       this.receivedChunkCount++;

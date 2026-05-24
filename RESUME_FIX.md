@@ -1,4 +1,4 @@
-# File Transfer Resume Fix
+# File Transfer Resume Fix - v2
 
 ## Problem
 When the receiver experiences a network interruption and reconnects after ~20 seconds, the file transfer was not auto-resuming. The transfer would get stuck even though:
@@ -20,7 +20,13 @@ After the data channel reopened, the receiver was not automatically triggering t
 ### 4. **Sender Refs Not Exposed**
 The `useFileTransfer` hook was not exposing `senderRef` and `receiverRef`, making it impossible to access the FileSender/FileReceiver instances for reconnection handling.
 
-## Fixes Applied
+### 5. **Sender Pump Not Restarting**
+After reconnection, even when the sender received a resume request, the internal pump mechanism wasn't restarting, so no chunks were being sent.
+
+### 6. **No Retry Mechanism**
+If the resume request was lost or the sender didn't respond, there was no retry mechanism to request chunks again.
+
+## Fixes Applied (v2 - Enhanced)
 
 ### 1. **Added Resume Request Handler in TransferRoom** (`src/pages/TransferRoom.jsx`)
 ```javascript
@@ -43,6 +49,26 @@ if (isSender) {
 manager.on('channel-open', () => {
   // ... existing code ...
   
+  // SENDER SIDE
+  if (isSender && senderFiles?.length > 0) {
+    if (!fileTransfer.senderRef?.current) {
+      // First connection
+      fileTransfer.startSending(senderFiles, manager.dataChannel);
+    } else {
+      // Reconnection - rewire the data channel
+      const sender = fileTransfer.senderRef.current;
+      sender.transport = createTransport(manager.dataChannel);
+      
+      // CRITICAL: Restart the pump if we were in the middle of sending
+      if (sender._currentPumpFile && !sender.cancelled) {
+        sender._sending = false;
+        sender._clearResumeTimer();
+        sender._doPump();
+      }
+    }
+  }
+  
+  // RECEIVER SIDE
   if (!isSender && initialMetadata) {
     if (!fileTransfer.receiverRef?.current) {
       // First connection
@@ -60,17 +86,6 @@ manager.on('channel-open', () => {
       }
     }
   }
-  
-  if (isSender && senderFiles?.length > 0) {
-    if (!fileTransfer.senderRef?.current) {
-      // First connection
-      fileTransfer.startSending(senderFiles, manager.dataChannel);
-    } else {
-      // Reconnection - rewire transport
-      const sender = fileTransfer.senderRef.current;
-      sender.transport = createTransport(manager.dataChannel);
-    }
-  }
 });
 ```
 
@@ -83,7 +98,7 @@ return {
 };
 ```
 
-### 4. **Added Public Resume Method** (`src/lib/fileTransfer.js`)
+### 4. **Added Public Resume Method with Retry** (`src/lib/fileTransfer.js`)
 ```javascript
 /**
  * Public method to trigger resume (called after reconnection)
@@ -92,13 +107,82 @@ async triggerResume() {
   if (this.currentFileId && this.currentFileMeta) {
     console.log('[FileReceiver] Manually triggering resume after reconnection');
     await this._tryResume();
+    
+    // Set a timeout to retry if no chunks arrive
+    if (this._resumeTimeout) {
+      clearTimeout(this._resumeTimeout);
+    }
+    
+    const lastChunkCount = this.receivedChunkCount;
+    this._resumeTimeout = setTimeout(() => {
+      // If we haven't received any new chunks in 5 seconds, try again
+      if (this.receivedChunkCount === lastChunkCount && 
+          this.receivedChunkCount < this.currentFileMeta.totalChunks) {
+        console.log('[FileReceiver] No chunks received after resume, retrying...');
+        this._tryResume();
+      }
+    }, 5000);
   }
 }
 ```
 
-### 5. **Added Import for createTransport** (`src/pages/TransferRoom.jsx`)
+### 5. **Enhanced Sender Resume Position Handler** (`src/lib/fileTransfer.js`)
+```javascript
+setResumePosition(fileIndex, resumeFromChunk) {
+  console.log(`[FileSender] setResumePosition called for file ${fileIndex} from chunk ${resumeFromChunk}`);
+  
+  if (fileIndex === this.currentFileIndex) {
+    this.currentChunk = resumeFromChunk;
+    
+    // CRITICAL: Restart the pump regardless of current state
+    this._sending = false;
+    this._clearResumeTimer();
+    
+    // If we have an active pump promise, restart it
+    if (this._currentPumpFile) {
+      console.log('[FileSender] Restarting pump after resume request');
+      this._doPump();
+    }
+  } else {
+    this._pendingResume = { fileIndex, resumeFromChunk };
+  }
+  
+  // Always send ACK back to receiver
+  this._sendControl({
+    ctrl: MSG.FILE_RESUME_ACK,
+    fileIndex,
+    resumeFromChunk,
+  });
+}
+```
+
+### 6. **Clear Resume Timeout on Chunk Receipt** (`src/lib/fileTransfer.js`)
+```javascript
+async _handleChunk(buffer) {
+  // ... existing validation ...
+  
+  // Clear resume timeout since we're receiving chunks
+  if (this._resumeTimeout) {
+    clearTimeout(this._resumeTimeout);
+    this._resumeTimeout = null;
+  }
+  
+  // ... rest of chunk handling ...
+}
+```
+
+### 7. **Added Import for createTransport** (`src/pages/TransferRoom.jsx`)
 ```javascript
 import { createTransport } from '../lib/fileTransfer';
+```
+
+### 8. **Enhanced WebRTC Channel Events** (`src/lib/webrtc.js`)
+```javascript
+channel.onopen = () => {
+  this._emit('channel-open');
+  this._emit('channel-reopen', channel); // Emit with channel reference for rewiring
+  this._startKeepalive();
+};
 ```
 
 ## How It Works Now
@@ -110,20 +194,47 @@ import { createTransport } from '../lib/fileTransfer';
 4. File transfer starts
 5. Chunks are received and saved to IndexedDB
 
-### Reconnection Flow (After Network Interruption)
+### Reconnection Flow (After Network Interruption) - ENHANCED
+
+#### Phase 1: Connection Loss
 1. **Network interruption occurs** → WebRTC connection state changes to 'disconnected'
-2. **WebRTC attempts ICE restart** → `_attemptReconnection()` is called
-3. **ICE restart creates new offer** → Sent via signaling to peer
-4. **Connection re-established** → ICE state becomes 'connected'
-5. **Data channel reopens** → `channel-open` event fires
-6. **Receiver detects reconnection** → Checks if `receiverRef.current` exists
-7. **Data channel rewired** → `onmessage` handler reconnected to FileReceiver
-8. **Resume triggered** → `receiver.triggerResume()` called
-9. **Resume request sent** → Via signaling: `FILE_RESUME_REQUEST` with fileIndex and resumeFromChunk
-10. **Sender receives request** → Via signaling listener in TransferRoom
-11. **Sender updates position** → `sender.setResumePosition(fileIndex, resumeFromChunk)` called
-12. **Sender resumes from chunk** → Starts sending from the requested chunk
-13. **Receiver continues** → Receives remaining chunks and completes transfer
+2. **Sender pump stops** → No more chunks being sent
+3. **Receiver waits** → IndexedDB has all chunks received so far
+
+#### Phase 2: Reconnection
+4. **WebRTC attempts ICE restart** → `_attemptReconnection()` is called
+5. **ICE restart creates new offer** → Sent via signaling to peer
+6. **Connection re-established** → ICE state becomes 'connected'
+7. **Data channel reopens** → `channel-open` event fires on both sides
+
+#### Phase 3: Sender Rewiring
+8. **Sender detects reconnection** → Checks if `senderRef.current` exists
+9. **Transport recreated** → New transport wrapper for data channel
+10. **Pump restarted** → `_doPump()` called to resume sending from current chunk
+
+#### Phase 4: Receiver Rewiring & Resume Request
+11. **Receiver detects reconnection** → Checks if `receiverRef.current` exists
+12. **Data channel rewired** → `onmessage` handler reconnected to FileReceiver
+13. **Resume triggered** → `receiver.triggerResume()` called
+14. **Chunks loaded from IndexedDB** → Restores received chunks into memory
+15. **Resume request sent** → Via signaling: `FILE_RESUME_REQUEST` with fileIndex and resumeFromChunk
+16. **Retry timer set** → 5-second timeout to retry if no chunks arrive
+
+#### Phase 5: Sender Response
+17. **Sender receives request** → Via signaling listener in TransferRoom
+18. **Sender updates position** → `sender.setResumePosition(fileIndex, resumeFromChunk)` called
+19. **Sender pump restarted** → `_doPump()` called again to ensure sending
+20. **ACK sent back** → `FILE_RESUME_ACK` via data channel
+
+#### Phase 6: Transfer Resumes
+21. **Sender resumes from chunk** → Starts sending from the requested chunk position
+22. **Receiver gets first chunk** → Clears retry timeout
+23. **Transfer continues** → Receives remaining chunks and completes transfer
+
+### Retry Mechanism
+- If no chunks arrive within 5 seconds after resume request, receiver automatically retries
+- This handles cases where the resume request or ACK was lost
+- Retry continues until chunks start arriving or transfer completes
 
 ## Testing Recommendations
 

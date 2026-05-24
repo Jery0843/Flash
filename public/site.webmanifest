@@ -12,5 +12,32 @@
       "sizes": "512x512",
       "type": "image/png"
     }
+  ],
+  "share_target": {
+    "action": "/receive-share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "files",
+          "accept": ["*/*"]
+        }
+      ]
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": {
+        "image/*": [".jpg", ".jpeg", ".png", ".gif", ".webp"],
+        "video/*": [".mp4", ".mkv", ".mov", ".avi"],
+        "audio/*": [".mp3", ".wav", ".ogg"],
+        "application/pdf": [".pdf"],
+        "text/*": [".txt", ".md", ".json"],
+        "application/zip": [".zip"],
+        "application/x-zip-compressed": [".zip"]
+      }
+    }
   ]
 }

@@ -31,6 +31,40 @@ export function CreateRoom() {
   const signalingRef = useRef(signaling);
   useEffect(() => { signalingRef.current = signaling; }, [signaling]);
 
+  // Handle incoming files from PWA share target or file handlers
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data && event.data.type === 'SHARE_TARGET_FILES') {
+        const sharedFiles = event.data.files;
+        if (sharedFiles && sharedFiles.length > 0) {
+          setFiles(prev => [...prev, ...sharedFiles]);
+        }
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleMessage);
+    }
+
+    // Also check for Launch Queue (Chrome 102+)
+    if ('launchQueue' in window) {
+      window.launchQueue.setConsumer(async (launchParams) => {
+        if (!launchParams.files.length) return;
+        
+        const fileEntries = await Promise.all(
+          launchParams.files.map(handle => handle.getFile())
+        );
+        setFiles(prev => [...prev, ...fileEntries]);
+      });
+    }
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
+      }
+    };
+  }, []);
+
   const manifest = useMemo(() => ({
     files: files.map((f) => ({
       name: f.name,

@@ -6,10 +6,17 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#000000",
   "theme_color": "#00f3ff",
   "categories": ["productivity", "utilities"],
   "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/favicon.png",
       "sizes": "512x512",
@@ -18,9 +25,31 @@
     },
     {
       "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/og-image.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Flash Desktop App"
+    },
+    {
+      "src": "/og-image.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Flash Mobile App"
     }
   ],
   "share_target": {
@@ -28,6 +57,8 @@
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
+      "title": "name",
+      "text": "description",
       "files": [
         {
           "name": "files",
@@ -38,7 +69,10 @@
             "audio/*",
             "application/pdf",
             "text/*",
-            "application/zip"
+            "application/zip",
+            ".mkv",
+            ".mp4",
+            ".zip"
           ]
         }
       ]
@@ -56,6 +90,18 @@
         "application/zip": [".zip"],
         "application/x-zip-compressed": [".zip"]
       }
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Send Files",
+      "url": "/create",
+      "description": "Start a new file transfer"
+    },
+    {
+      "name": "Receive Files",
+      "url": "/join",
+      "description": "Join a transfer room"
     }
   ]
 }

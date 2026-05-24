@@ -15,5 +15,6 @@ new_classes = ["SignalingRoom"]
 
 # Environment variables (set via wrangler secret or dashboard)
 # [vars]
-# TURN_DOMAIN = "your-turn-server.metered.ca"
-# Use `wrangler secret put TURN_SECRET` for the TURN shared secret
+# Cloudflare TURN credentials (set via wrangler secret)
+# Use `wrangler secret put TURN_KEY_ID` for the TURN key ID
+# Use `wrangler secret put TURN_SECRET` for the TURN secret

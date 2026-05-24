@@ -7,7 +7,7 @@ export function useWebRTC() {
   const [connectionType, setConnectionType] = useState(null);
   const [channelOpen, setChannelOpen] = useState(false);
 
-  const init = useCallback(async (initiator) => {
+  const init = useCallback(async (initiator, signalingClient = null) => {
     if (managerRef.current) {
       managerRef.current.close();
     }
@@ -19,7 +19,7 @@ export function useWebRTC() {
     manager.on('channel-open', () => setChannelOpen(true));
     manager.on('channel-close', () => setChannelOpen(false));
 
-    await manager.init(initiator);
+    await manager.init(initiator, signalingClient);
     return manager;
   }, []);
 

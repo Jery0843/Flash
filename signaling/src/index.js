@@ -50,8 +50,8 @@ export default {
     }
 
     // ── TURN credentials ─────────────────────────────────
-    // In production, generate short-lived HMAC credentials here.
-    // The TURN shared secret should be in env.TURN_SECRET.
+    // Uses Cloudflare TURN API to generate short-lived ICE credentials
+    // Requires env.TURN_KEY_ID and env.TURN_SECRET
     if (url.pathname === '/turn-credentials') {
       const rateCheck = checkRateLimit(ip, 'turn', 10);
       if (!rateCheck.allowed) {
@@ -61,34 +61,41 @@ export default {
         });
       }
 
-      // If TURN_SECRET is configured, generate ephemeral credentials
-      if (env.TURN_SECRET && env.TURN_DOMAIN) {
-        const ttl = 300; // 5 minutes
-        const timestamp = Math.floor(Date.now() / 1000) + ttl;
-        const username = `${timestamp}:flash-user`;
-        
-        // HMAC-SHA1 credential generation
-        const encoder = new TextEncoder();
-        const key = await crypto.subtle.importKey(
-          'raw',
-          encoder.encode(env.TURN_SECRET),
-          { name: 'HMAC', hash: 'SHA-1' },
-          false,
-          ['sign']
-        );
-        const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(username));
-        const credential = btoa(String.fromCharCode(...new Uint8Array(signature)));
+      // If Cloudflare TURN credentials are configured, fetch from API
+      if (env.TURN_KEY_ID && env.TURN_SECRET) {
+        try {
+          const ttl = 86400; // 24 hours
+          const response = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${env.TURN_SECRET}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ttl }),
+          });
 
-        return new Response(JSON.stringify({
-          iceServers: [{
-            urls: [`turns:${env.TURN_DOMAIN}:443`, `turn:${env.TURN_DOMAIN}:3478`],
-            username,
-            credential,
-          }],
-          ttl,
-        }), {
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-        });
+          if (!response.ok) {
+            console.error('[TURN] Failed to fetch credentials:', response.status, response.statusText);
+            return new Response(JSON.stringify({ error: 'Failed to generate TURN credentials' }), {
+              status: 500,
+              headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+            });
+          }
+
+          const data = await response.json();
+          return new Response(JSON.stringify({
+            iceServers: data.iceServers,
+            ttl,
+          }), {
+            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+          });
+        } catch (err) {
+          console.error('[TURN] Error fetching credentials:', err);
+          return new Response(JSON.stringify({ error: 'Failed to generate TURN credentials' }), {
+            status: 500,
+            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+          });
+        }
       }
 
       // No TURN configured — return empty (STUN-only mode)

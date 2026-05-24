@@ -120,7 +120,7 @@ export function TransferRoom() {
           await signaling.connect();
         }
 
-        const manager = await webrtc.init(isSender);
+        const manager = await webrtc.init(isSender, signaling.client);
 
         // Wire up ICE candidates
         manager.on('ice-candidate', (candidate) => {

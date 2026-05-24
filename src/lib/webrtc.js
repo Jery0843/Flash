@@ -36,12 +36,13 @@ export class WebRTCManager {
   /**
    * Initialize the peer connection.
    * @param {boolean} initiator - true for sender, false for receiver
+   * @param {object} signalingClient - Optional signaling client for fetching TURN credentials
    */
-  async init(initiator) {
+  async init(initiator, signalingClient = null) {
     this.isInitiator = initiator;
     
     // Fetch TURN credentials for global connectivity
-    const config = await this._getIceConfig();
+    const config = await this._getIceConfig(signalingClient);
     
     this.pc = new RTCPeerConnection(config);
 
@@ -266,29 +267,47 @@ export class WebRTCManager {
     };
   }
 
-  async _getIceConfig() {
+  async _getIceConfig(signalingClient = null) {
     const config = { ...WEBRTC_CONFIG };
     
-    // Try to fetch short-lived TURN credentials
-    try {
-      const res = await fetch(TURN_CREDENTIALS_URL, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      
-      if (res.ok) {
-        const turnData = await res.json();
-        if (turnData.iceServers) {
+    // Try to fetch short-lived TURN credentials from signaling server
+    if (signalingClient && signalingClient.getTurnCredentials) {
+      try {
+        const turnData = await signalingClient.getTurnCredentials();
+        if (turnData.iceServers && turnData.iceServers.length > 0) {
           config.iceServers = [
             ...config.iceServers,
             ...turnData.iceServers,
           ];
+          console.log('[WebRTC] TURN credentials added from signaling server');
         }
+      } catch (err) {
+        // TURN credentials unavailable — continue with STUN only
+        // P2P will still work for ~80% of connections
+        console.warn('[WebRTC] Could not fetch TURN credentials via signaling:', err.message);
       }
-    } catch (err) {
-      // TURN credentials unavailable — continue with STUN only
-      // P2P will still work for ~80% of connections
-      console.warn('[WebRTC] Could not fetch TURN credentials:', err.message);
+    } else {
+      // Fallback to direct fetch if no signaling client provided
+      try {
+        const res = await fetch(TURN_CREDENTIALS_URL, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        
+        if (res.ok) {
+          const turnData = await res.json();
+          if (turnData.iceServers) {
+            config.iceServers = [
+              ...config.iceServers,
+              ...turnData.iceServers,
+            ];
+          }
+        }
+      } catch (err) {
+        // TURN credentials unavailable — continue with STUN only
+        // P2P will still work for ~80% of connections
+        console.warn('[WebRTC] Could not fetch TURN credentials:', err.message);
+      }
     }
 
     return config;

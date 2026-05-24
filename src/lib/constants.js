@@ -17,8 +17,8 @@ export const MAX_RECONNECT_ATTEMPTS = 50; // Increased from 3 to allow long-term
 
 // ── Signaling Server ───────────────────────────────────────
 // Set via VITE_SIGNALING_URL and VITE_TURN_CREDENTIALS_URL env vars
-export const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL || 'ws://localhost:8787/ws';
-export const TURN_CREDENTIALS_URL = import.meta.env.VITE_TURN_CREDENTIALS_URL || 'http://localhost:8787/turn-credentials';
+export const SIGNALING_URL = import.meta.env.VITE_SIGNALING_URL || 'wss://flash-signaling.cloudpcs017.workers.dev/ws';
+export const TURN_CREDENTIALS_URL = import.meta.env.VITE_TURN_CREDENTIALS_URL || 'https://flash-signaling.cloudpcs017.workers.dev/turn-credentials';
 
 // ── ICE Servers ────────────────────────────────────────────
 // STUN servers are free and used for direct P2P discovery.

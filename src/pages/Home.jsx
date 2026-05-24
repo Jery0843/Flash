@@ -35,28 +35,28 @@ export function Home() {
   // FAQ data for rich snippets
   const faqData = [
     {
-      question: "Is Flash File Transfer free to use?",
-      answer: "Yes, Flash File Transfer is completely free. There are no file size limits, no subscription fees, and no hidden charges. Send unlimited files up to 25GB for free."
+      question: "Is Flash completely free?",
+      answer: "Yes. There are no hidden fees, subscriptions, or file size limits. Send up to 25GB entirely for free."
     },
     {
-      question: "How secure is Flash File Transfer?",
-      answer: "Flash uses end-to-end encryption via WebRTC, ensuring your files never pass through any server. Files are transferred directly between devices, making it one of the most secure file transfer methods available."
+      question: "How secure are the transfers?",
+      answer: "We use WebRTC for end-to-end encryption. Your files are transferred directly between devices and never stored on any server, ensuring maximum privacy."
     },
     {
-      question: "What is the maximum file size I can send?",
-      answer: "Flash supports file transfers up to 25GB. There are no artificial limits on file size or the number of files you can transfer."
+      question: "What is the maximum file size?",
+      answer: "You can send files up to 25GB. There are no limits on the number of files you can transfer at once."
     },
     {
       question: "Do I need to create an account?",
-      answer: "No account required. Flash works entirely in your browser with no registration, login, or personal information needed."
+      answer: "Not at all. Flash works entirely in your browser. No registration, login, or personal information is required."
     },
     {
-      question: "Can I transfer files between different devices?",
-      answer: "Yes, Flash works across all platforms - desktop, mobile, tablet, and any device with a modern web browser. Transfer files between Windows, Mac, Linux, iOS, and Android seamlessly."
+      question: "Does it work across different devices?",
+      answer: "Yes, Flash is fully cross-platform. You can seamlessly transfer files between Windows, Mac, Linux, iOS, and Android."
     },
     {
-      question: "How fast are file transfers with Flash?",
-      answer: "Transfer speeds depend on your internet connection. Since files are sent directly peer-to-peer, you get the maximum possible speed without server bottlenecks."
+      question: "How fast are the transfers?",
+      answer: "Speeds depend on your network connection. Since transfers are direct peer-to-peer, you'll experience the maximum possible speed without server delays."
     }
   ];
 
@@ -74,12 +74,12 @@ export function Home() {
   };
 
   const features = [
-    { icon: <Shield size={32} className="feature-icon" />, title: "End-to-End Encryption", desc: "Your files never pass through any server. Direct P2P transfer ensures maximum security and privacy." },
-    { icon: <Zap size={32} className="feature-icon" />, title: "Lightning Fast", desc: "No server bottlenecks. Transfer at maximum speed with direct peer-to-peer WebRTC connections." },
-    { icon: <HardDrive size={32} className="feature-icon" />, title: "Up to 25GB Files", desc: "Send large files without size limits. Perfect for videos, archives, and large documents." },
-    { icon: <Globe size={32} className="feature-icon" />, title: "Cross-Platform", desc: "Works on all devices - desktop, mobile, tablet. Windows, Mac, Linux, iOS, Android." },
-    { icon: <UserX size={32} className="feature-icon" />, title: "No Account Required", desc: "No registration, no login, no personal information. Just open and transfer." },
-    { icon: <Gift size={32} className="feature-icon" />, title: "100% Free", desc: "No subscription fees, no hidden charges. Unlimited transfers, completely free forever." }
+    { icon: <Shield size={32} className="feature-icon" />, title: "End-to-End Encryption", desc: "Your files never touch a server. Direct peer-to-peer connections guarantee absolute privacy." },
+    { icon: <Zap size={32} className="feature-icon" />, title: "Lightning Fast", desc: "Bypass server bottlenecks. Experience maximum speeds through direct WebRTC connections." },
+    { icon: <HardDrive size={32} className="feature-icon" />, title: "Massive File Support", desc: "Send files up to 25GB seamlessly. Ideal for high-res videos, archives, and large project folders." },
+    { icon: <Globe size={32} className="feature-icon" />, title: "Cross-Platform", desc: "Seamlessly transfer across desktop, mobile, and tablet. Fully compatible with Windows, Mac, Linux, iOS, and Android." },
+    { icon: <UserX size={32} className="feature-icon" />, title: "No Account Required", desc: "Skip the sign-up process. No personal information required—just open the app and start sharing." },
+    { icon: <Gift size={32} className="feature-icon" />, title: "100% Free", desc: "Enjoy unlimited transfers without subscriptions or hidden fees. Completely free to use." }
   ];
 
   const comparisons = [
@@ -117,7 +117,7 @@ export function Home() {
           FLASH
         </motion.h1>
         <motion.p className="home-subtitle" variants={staggerItem}>
-          Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing.
+          Instant, browser-to-browser file transfers. No uploads, no storage limits, just secure P2P sharing.
         </motion.p>
 
         <motion.div className="home-actions" variants={staggerItem}>

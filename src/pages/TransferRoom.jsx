@@ -12,6 +12,7 @@ import { useSignaling } from '../hooks/useSignaling';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useFileTransfer } from '../hooks/useFileTransfer';
 import { MSG, ROOM_STATES, CHUNK_SIZE, formatFileSize, getFileIcon } from '../lib/constants';
+import { createTransport } from '../lib/fileTransfer';
 import './TransferRoom.css';
 
 export function TransferRoom() {
@@ -75,12 +76,43 @@ export function TransferRoom() {
         manager.on('channel-open', () => {
           setRoomStatus(ROOM_STATES.CONNECTED);
           setRoomStatus(ROOM_STATES.TRANSFERRING);
+          
+          // Wire up data channel to file transfer
           if (isSender && senderFiles?.length > 0) {
-            fileTransfer.startSending(senderFiles, manager.dataChannel);
+            // Check if already started
+            if (!fileTransfer.senderRef?.current) {
+              fileTransfer.startSending(senderFiles, manager.dataChannel);
+            } else {
+              // Reconnection - rewire the data channel
+              console.log('[TransferRoom] Rewiring sender data channel after reconnection');
+              const sender = fileTransfer.senderRef.current;
+              sender.transport = createTransport(manager.dataChannel);
+            }
           }
+          
           if (!isSender && initialMetadata) {
-            fileTransfer.startReceiving(initialMetadata, manager.dataChannel, signaling.client, roomCode, peerId);
+            // Check if already started
+            if (!fileTransfer.receiverRef?.current) {
+              fileTransfer.startReceiving(initialMetadata, manager.dataChannel, signaling.client, roomCode, peerId);
+            } else {
+              // Reconnection - rewire the data channel and trigger resume
+              console.log('[TransferRoom] Rewiring receiver data channel after reconnection');
+              const receiver = fileTransfer.receiverRef.current;
+              manager.dataChannel.onmessage = (event) => {
+                receiver.handleMessage(event.data);
+              };
+              
+              // Trigger resume request if we have a current file in progress
+              if (receiver.currentFileMeta && receiver.currentFileId) {
+                console.log('[TransferRoom] Triggering resume after reconnection');
+                receiver.triggerResume();
+              }
+            }
           }
+        });
+
+        manager.on('channel-close', () => {
+          console.log('[TransferRoom] Data channel closed, connection may be recovering...');
         });
 
         manager.on('connection-failed', () => {
@@ -148,6 +180,19 @@ export function TransferRoom() {
           setError('Transfer was cancelled by the other peer.');
           webrtc.close();
         });
+
+        // Handle resume requests from receiver (sender only)
+        if (isSender) {
+          signaling.on(MSG.FILE_RESUME_REQUEST, (data) => {
+            console.log('[TransferRoom] Received resume request:', data);
+            const { fileIndex, resumeFromChunk } = data;
+            // Forward to the file sender
+            const sender = fileTransfer.senderRef?.current;
+            if (sender && sender.setResumePosition) {
+              sender.setResumePosition(fileIndex, resumeFromChunk);
+            }
+          });
+        }
 
         // If sender, create and send offer
         if (isSender) {

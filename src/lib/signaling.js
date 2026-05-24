@@ -103,7 +103,7 @@ export class SignalingClient {
 
         if (shouldReconnect) {
           this.reconnectAttempts++;
-          const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000);
+          const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 5000);
           setTimeout(() => this.connect(this.lastQueryParams).catch(() => {}), delay);
         }
 

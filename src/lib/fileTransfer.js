@@ -611,6 +611,16 @@ export class FileReceiver {
     }
   }
 
+  /**
+   * Public method to trigger resume (called after reconnection)
+   */
+  async triggerResume() {
+    if (this.currentFileId && this.currentFileMeta) {
+      console.log('[FileReceiver] Manually triggering resume after reconnection');
+      await this._tryResume();
+    }
+  }
+
   async _handleChunk(buffer) {
     if (!this.currentFileMeta || !this.chunks) return;
 

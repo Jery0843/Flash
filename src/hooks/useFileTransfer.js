@@ -158,5 +158,7 @@ export function useFileTransfer() {
     downloadAll,
     downloadAsZip,
     reset,
+    senderRef,
+    receiverRef,
   };
 }

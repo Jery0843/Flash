@@ -234,6 +234,7 @@ export class WebRTCManager {
 
     channel.onopen = () => {
       this._emit('channel-open');
+      this._emit('channel-reopen', channel); // Emit with channel reference for rewiring
       this._startKeepalive();
     };
 

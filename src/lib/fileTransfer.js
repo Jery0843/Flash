@@ -507,6 +507,12 @@ export class FileReceiver {
     this._dbUpdateTimer = null;
     this.cancelled = false;
 
+    // OPFS / Disk Worker state
+    this.diskWorker = null;
+    this.diskWorkerReady = false;
+    this._pendingWorkerChunks = [];
+    this.useOPFS = false;
+
     // Callbacks
     this.onProgress = null;
     this.onFileComplete = null;
@@ -515,6 +521,49 @@ export class FileReceiver {
 
     // Initialize DB support
     this._initDB();
+    this._initDiskWorker();
+  }
+
+  _initDiskWorker() {
+    // Check if browser supports OPFS
+    if (typeof Worker !== 'undefined' && navigator.storage && navigator.storage.getDirectory) {
+      try {
+        this.diskWorker = new Worker(new URL('./diskWorker.js', import.meta.url), { type: 'module' });
+        this.diskWorker.onmessage = (e) => this._handleWorkerMessage(e.data);
+        this.useOPFS = true;
+      } catch (err) {
+        console.warn('[FileReceiver] DiskWorker failed to initialize:', err);
+        this.useOPFS = false;
+      }
+    } else {
+      console.log('[FileReceiver] OPFS not supported, using IndexedDB fallback');
+      this.useOPFS = false;
+    }
+  }
+
+  _handleWorkerMessage(msg) {
+    const { type, payload } = msg;
+
+    switch (type) {
+      case 'READY':
+        console.log('[FileReceiver] DiskWorker ready:', payload.tempName);
+        this.diskWorkerReady = true;
+        // Process any chunks that arrived while worker was starting
+        for (const chunk of this._pendingWorkerChunks) {
+          this.diskWorker.postMessage({ type: 'WRITE_CHUNK', payload: chunk });
+        }
+        this._pendingWorkerChunks = [];
+        break;
+
+      case 'COMPLETE':
+        this._onFileAssembled(payload.file);
+        break;
+
+      case 'ERROR':
+        console.error('[FileReceiver] DiskWorker error:', payload);
+        this.onError?.(new Error(`Disk Error: ${payload}`));
+        break;
+    }
   }
 
   async _initDB() {
@@ -580,6 +629,15 @@ export class FileReceiver {
           };
           this.receivedChunkCount = 0;
           this.receivedChunksSet.clear();
+
+          // Initialize Disk Worker for this file
+          if (this.diskWorker) {
+            this.diskWorkerReady = false;
+            this.diskWorker.postMessage({
+              type: 'INIT',
+              payload: { fileName: msg.name, fileSize: msg.size }
+            });
+          }
 
           // Check IndexedDB for existing chunks to resume
           if (this.roomCode && this.dbEnabled) {
@@ -706,20 +764,29 @@ export class FileReceiver {
         this._resumeTimeout = null;
       }
 
-      // CRITICAL: For large files, we MUST use IndexedDB. RAM fallback will crash the browser.
       if (this.currentFileId && this.dbEnabled) {
         const saved = await saveChunk(this.currentFileId, index, data);
         if (!saved) {
           // IndexedDB write failed (likely quota exceeded)
-          console.error('[FileReceiver] IndexedDB write failed for chunk', index, '- storage quota may be exceeded');
-          this.onError?.(new Error('Storage quota exceeded. Please free up disk space and try again.'));
+          console.error('[FileReceiver] IndexedDB write failed for chunk', index);
+          this.onError?.(new Error('Storage quota exceeded. Please free up disk space.'));
           this.cancel();
           return;
         }
         this._throttleDbUpdate();
+      }
+
+      // Stream to Disk Worker (OPFS) - This is the primary storage for large files
+      if (this.useOPFS && this.diskWorker) {
+        if (this.diskWorkerReady) {
+          this.diskWorker.postMessage({ type: 'WRITE_CHUNK', payload: { index, data } }, [data]);
+        } else {
+          // Worker not ready yet (first few chunks), queue them
+          this._pendingWorkerChunks.push({ index, data });
+        }
       } else {
-        // IndexedDB not available - this will fail for large files
-        console.warn('[FileReceiver] IndexedDB not available, using RAM fallback (will fail for large files)');
+        // Fallback to RAM only if OPFS is not available
+        // NOTE: For 3GB files, this WILL crash if IndexedDB is also disabled.
         if (!this._fallbackChunks) this._fallbackChunks = [];
         this._fallbackChunks[index] = data;
       }
@@ -766,44 +833,57 @@ export class FileReceiver {
     this._clearDbUpdateTimer();
 
     try {
-      let chunksToAssemble;
-      if (this.currentFileId && this.dbEnabled) {
-        console.log('[FileReceiver] Assembling file from IndexedDB...');
-        chunksToAssemble = await getAllChunks(this.currentFileId);
+      if (this.useOPFS && this.diskWorker) {
+        console.log('[FileReceiver] Finalizing disk file...');
+        this.diskWorker.postMessage({ type: 'FINALIZE' });
+        // Completion will be handled in _handleWorkerMessage ('COMPLETE' event)
       } else {
-        chunksToAssemble = this._fallbackChunks || [];
+        // Legacy/RAM fallback assembly
+        let chunksToAssemble;
+        if (this.currentFileId && this.dbEnabled) {
+          console.log('[FileReceiver] Assembling file from IndexedDB...');
+          chunksToAssemble = await getAllChunks(this.currentFileId);
+        } else {
+          chunksToAssemble = this._fallbackChunks || [];
+        }
+
+        const blob = new Blob(
+          chunksToAssemble.map((chunk) => new Uint8Array(chunk)),
+          { type: this.currentFileMeta.type }
+        );
+        
+        this._onFileAssembled(blob);
       }
-
-      const blob = new Blob(
-        chunksToAssemble.map((chunk) => new Uint8Array(chunk)),
-        { type: this.currentFileMeta.type }
-      );
-
-      const fileResult = {
-        blob,
-        name: this.currentFileMeta.name,
-        type: this.currentFileMeta.type,
-        size: this.currentFileMeta.size,
-        index: this.currentFileMeta.index,
-      };
-
-      this.receivedFiles.push(fileResult);
-      this.onFileComplete?.(this.currentFileMeta.index, fileResult);
-
-      // Clean up IndexedDB for completed file
-      if (this.currentFileId && this.dbEnabled) {
-        deleteTransfer(this.currentFileId).catch((err) => {
-          console.warn('[FileReceiver] Failed to cleanup IndexedDB:', err);
-        });
-      }
-
-      this._fallbackChunks = null;
-      this.currentFileMeta = null;
-      this.receivedChunkCount = 0;
-      this.currentFileId = null;
     } catch (err) {
       this.onError?.(err);
     }
+  }
+
+  _onFileAssembled(fileOrBlob) {
+    if (!this.currentFileMeta) return;
+
+    const fileResult = {
+      blob: fileOrBlob,
+      name: this.currentFileMeta.name,
+      type: this.currentFileMeta.type,
+      size: this.currentFileMeta.size,
+      index: this.currentFileMeta.index,
+    };
+
+    this.receivedFiles.push(fileResult);
+    this.onFileComplete?.(this.currentFileMeta.index, fileResult);
+
+    // Clean up IndexedDB for completed file
+    if (this.currentFileId && this.dbEnabled) {
+      deleteTransfer(this.currentFileId).catch((err) => {
+        console.warn('[FileReceiver] Failed to cleanup IndexedDB:', err);
+      });
+    }
+
+    this._fallbackChunks = null;
+    this.currentFileMeta = null;
+    this.receivedChunkCount = 0;
+    this.currentFileId = null;
   }
 }
 

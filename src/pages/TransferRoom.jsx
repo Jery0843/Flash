@@ -48,7 +48,14 @@ export function TransferRoom() {
     return null;
   });
 
-  const { role, files: senderFiles, fileMetadata: initialMetadata, peerId, roomCode } = sessionData || {};
+  const { role, files: senderFiles, fileMetadata: initialMetadata, peerId: initialPeerId, roomCode } = sessionData || {};
+  const isSender = role === 'sender';
+
+  const peerIdRef = useRef(initialPeerId);
+  // Synchronize ref with sessionData
+  useEffect(() => {
+    peerIdRef.current = sessionData?.peerId;
+  }, [sessionData]);
 
   const signaling = useSignaling();
   const webrtc = useWebRTC();
@@ -58,7 +65,6 @@ export function TransferRoom() {
   const [error, setError] = useState(null);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const downloadButtonRef = useRef(null);
-  const isSender = role === 'sender';
   const hasStartedRef = useRef(false);
   const displayRoomStatus = fileTransfer.transferState === 'completed' ? ROOM_STATES.COMPLETED : roomStatus;
 
@@ -97,8 +103,20 @@ export function TransferRoom() {
 
     const setupWebRTC = async () => {
       try {
-        // Reuse the existing room socket across route changes.
-        if (!signaling.client?.connected) {
+        // Ensure signaling is connected to the right room
+        let joinResponse;
+        if (roomCode) {
+          joinResponse = await signaling.connect(isSender 
+            ? { action: 'create', code: roomCode } 
+            : { action: 'join', code: roomCode }
+          );
+          
+          // Update our local peerId from the server response
+          if (joinResponse?.peerId && joinResponse.peerId !== peerIdRef.current) {
+            console.log('[TransferRoom] Server assigned peerId:', joinResponse.peerId);
+            setSessionData(prev => prev ? { ...prev, peerId: joinResponse.peerId } : prev);
+          }
+        } else {
           await signaling.connect();
         }
 
@@ -108,7 +126,7 @@ export function TransferRoom() {
         manager.on('ice-candidate', (candidate) => {
           signaling.send(MSG.ICE_CANDIDATE, { 
             candidate, 
-            targetPeerId: isSender ? peerId : undefined // For receiver, server routes to sender automatically
+            targetPeerId: isSender ? peerIdRef.current : undefined // For receiver, server routes to sender automatically
           });
         });
 
@@ -139,7 +157,7 @@ export function TransferRoom() {
           if (!isSender && initialMetadata) {
             // Check if already started
             if (!fileTransfer.receiverRef?.current) {
-              fileTransfer.startReceiving(initialMetadata, manager.dataChannel, signaling.client, roomCode, peerId);
+              fileTransfer.startReceiving(initialMetadata, manager.dataChannel, signaling.client, roomCode, peerIdRef.current);
             } else {
               // Reconnection - rewire the data channel and trigger resume
               console.log('[TransferRoom] Rewiring receiver data channel after reconnection');
@@ -176,8 +194,8 @@ export function TransferRoom() {
         // Listen for incoming signaling messages
         signaling.on(MSG.SDP_OFFER, async (data) => {
           // For receivers, only process offers targeted to this peer
-          if (!isSender && peerId && data.targetPeerId !== peerId) {
-            console.log('[TransferRoom] Ignoring SDP offer for different peer:', data.targetPeerId, 'my peerId:', peerId);
+          if (!isSender && peerIdRef.current && data.targetPeerId !== peerIdRef.current) {
+            console.log('[TransferRoom] Ignoring SDP offer for different peer:', data.targetPeerId, 'my peerId:', peerIdRef.current);
             return;
           }
           const answer = await manager.handleOffer(data.sdp);
@@ -189,7 +207,7 @@ export function TransferRoom() {
           console.log('[TransferRoom] Received ICE restart offer');
           if (isSender) {
             // Sender initiated ICE restart, send via signaling
-            signaling.send(MSG.SDP_OFFER, { sdp: offer, targetPeerId: peerId });
+            signaling.send(MSG.SDP_OFFER, { sdp: offer, targetPeerId: peerIdRef.current });
           } else {
             // Receiver received ICE restart offer, respond with answer
             const answer = await manager.handleOffer(offer);
@@ -199,8 +217,8 @@ export function TransferRoom() {
 
         signaling.on(MSG.SDP_ANSWER, async (data) => {
           // For senders, only process answers from the expected peer
-          if (isSender && peerId && data.peerId !== peerId) {
-            console.log('[TransferRoom] Ignoring SDP answer from different peer:', data.peerId, 'my peerId:', peerId);
+          if (isSender && peerIdRef.current && data.peerId !== peerIdRef.current) {
+            console.log('[TransferRoom] Ignoring SDP answer from different peer:', data.peerId, 'my peerId:', peerIdRef.current);
             return;
           }
           await manager.handleAnswer(data.sdp);
@@ -208,12 +226,12 @@ export function TransferRoom() {
 
         signaling.on(MSG.ICE_CANDIDATE, async (data) => {
           // Filter ICE candidates by peerId
-          if (!isSender && peerId && data.targetPeerId !== peerId) {
-            console.log('[TransferRoom] Ignoring ICE candidate for different peer:', data.targetPeerId, 'my peerId:', peerId);
+          if (!isSender && peerIdRef.current && data.targetPeerId !== peerIdRef.current) {
+            console.log('[TransferRoom] Ignoring ICE candidate for different peer:', data.targetPeerId, 'my peerId:', peerIdRef.current);
             return;
           }
-          if (isSender && peerId && data.peerId !== peerId) {
-            console.log('[TransferRoom] Ignoring ICE candidate from different peer:', data.peerId, 'my peerId:', peerId);
+          if (isSender && peerIdRef.current && data.peerId !== peerIdRef.current) {
+            console.log('[TransferRoom] Ignoring ICE candidate from different peer:', data.peerId, 'my peerId:', peerIdRef.current);
             return;
           }
           await manager.addIceCandidate(data.candidate);
@@ -232,6 +250,11 @@ export function TransferRoom() {
         // Handle resume requests from receiver (sender only)
         if (isSender) {
           signaling.on(MSG.FILE_RESUME_REQUEST, (data) => {
+            // For senders, only process requests from the expected peer
+            if (peerIdRef.current && data.peerId !== peerIdRef.current) {
+              console.log('[TransferRoom] Ignoring resume request from different peer:', data.peerId, 'my peerId:', peerIdRef.current);
+              return;
+            }
             console.log('[TransferRoom] Received resume request:', data);
             const { fileIndex, resumeFromChunk } = data;
             // Forward to the file sender
@@ -249,7 +272,8 @@ export function TransferRoom() {
         }
 
       } catch (err) {
-        setError(err.message || 'Failed to establish connection');
+        console.error('[TransferRoom] WebRTC setup failed:', err);
+        setError(err.message || 'Connection failed');
         setRoomStatus(ROOM_STATES.FAILED);
       }
     };
@@ -257,10 +281,9 @@ export function TransferRoom() {
     setupWebRTC();
 
     return () => {
-      webrtc.close();
-      signaling.disconnect();
+      // Cleanup is handled by hook teardown
     };
-  }, []);
+  }, [signaling.client, isSender, roomCode, initialMetadata, senderFiles, navigate]);
 
   // Handle transfer completion — notify other peer
   useEffect(() => {

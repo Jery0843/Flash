@@ -99,6 +99,20 @@ export class SignalingRoom {
     const password = url.searchParams.get('password') || '';
 
     if (action === 'create') {
+      // If room already exists, verify token (for refreshes)
+      const existingToken = this.state.code;
+      const providedToken = url.searchParams.get('token');
+
+      if (existingToken && providedToken && existingToken !== providedToken) {
+        this.ctx.acceptWebSocket(server, ['sender-rejected']);
+        server.send(JSON.stringify({
+          type: MSG.ROOM_ERROR,
+          payload: { message: 'Room already exists with a different owner' },
+        }));
+        server.close(4003, 'Room ownership mismatch');
+        return new Response(null, { status: 101, webSocket: client });
+      }
+
       this.ctx.acceptWebSocket(server, ['sender']);
       // Initialize room
       this.state.code = roomCode;
@@ -156,7 +170,7 @@ export class SignalingRoom {
 
       server.send(JSON.stringify({
         type: MSG.ROOM_JOINED,
-        payload: { token: roomCode, peerId, isRejoin: !!isRejoin },
+        payload: { token: roomCode, roomCode: this.state.code, peerId, isRejoin: !!isRejoin },
       }));
 
       // Notify sender(s) that a receiver joined (or rejoined).
@@ -258,22 +272,28 @@ export class SignalingRoom {
     const tags = this.ctx.getTags(ws);
 
     if (tags?.includes('sender')) {
-      // Sender left — tear the whole room down.
-      this._broadcastAll(JSON.stringify({
-        type: MSG.ROOM_ERROR,
-        payload: { message: 'Sender disconnected' },
-      }));
-      this._cleanup();
+      // Sender left — wait a bit before tearing down to allow for refreshes
+      setTimeout(async () => {
+        const senders = this.ctx.getWebSockets('sender');
+        if (senders.length === 0) {
+          console.log('[SignalingRoom] Sender did not reconnect, cleaning up room:', this.state.code);
+          this._broadcastAll(JSON.stringify({
+            type: MSG.ROOM_ERROR,
+            payload: { message: 'Sender disconnected' },
+          }));
+          this._cleanup();
+        }
+      }, 5000); // 5 second grace period for refresh
       return;
     }
 
     if (tags?.includes('receiver')) {
       const att = ws.deserializeAttachment?.();
       const peerId = att?.peerId;
-      if (peerId && this.state.peers?.[peerId]) {
-        delete this.state.peers[peerId];
-        await this._persist();
-      }
+      // We do NOT delete the peerId from this.state.peers here.
+      // This allows the receiver to rejoin with the same ID after a refresh.
+      // The peer entry will be cleaned up when the room expires or the sender leaves.
+
       // Notify sender(s) that this peer left.
       const senders = this.ctx.getWebSockets('sender');
       for (const s of senders) {

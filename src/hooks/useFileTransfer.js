@@ -42,13 +42,22 @@ export function useFileTransfer() {
     }
   }, []);
 
+  const lastNotificationUpdateRef = useRef(0);
+
   const updateNotification = useCallback((s, state) => {
     if ('Notification' in window && Notification.permission === 'granted' && s) {
+      const now = Date.now();
       const progress = Math.round(s.progress || 0);
+      
+      // Throttle updates to once every 2 seconds or if progress is 100% or 0%
+      if (now - lastNotificationUpdateRef.current < 2000 && progress > 0 && progress < 100) {
+        return;
+      }
+      
+      lastNotificationUpdateRef.current = now;
       const title = state === 'sending' ? 'Sending files...' : 'Receiving files...';
       const body = `${progress}% - ${s.currentFileName || 'File'}`;
       
-      // We use the service worker to show notifications if available
       if (navigator.serviceWorker.controller) {
         navigator.serviceWorker.ready.then((registration) => {
           registration.showNotification(title, {
@@ -58,6 +67,8 @@ export function useFileTransfer() {
             tag: 'transfer-progress',
             silent: true,
             renotify: false,
+            // Add progress data for browsers that support it
+            data: { progress },
           });
         });
       }

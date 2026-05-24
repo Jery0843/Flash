@@ -27,3 +27,6 @@ self.addEventListener('message', (event) => {
     // console.log('[SW] Keep alive received');
   }
 });
+
+// Listen for push notifications or sync events if needed in future
+// For now, use the 'transfer-progress' tag to ensure we only have one active notification

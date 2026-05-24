@@ -176,19 +176,34 @@ export class MultiPeerSender {
     off(sig.on(MSG.RECEIVER_JOINED, ({ peerId }) => {
       if (!peerId) return;
       
-      // If peer already exists (rejoin), clean up old state first
-      if (this.peers.has(peerId)) {
-        const existingPeer = this.peers.get(peerId);
+      const existingPeer = this.peers.get(peerId);
+      let shouldAutoApprove = false;
+
+      if (existingPeer) {
+        // Auto-approve if they were already approved/transferring/completed
+        const autoApproveStatuses = ['connecting', 'transferring', 'failed', 'disconnected', 'completed'];
+        if (autoApproveStatuses.includes(existingPeer.status)) {
+          shouldAutoApprove = true;
+        }
+        
+        // Clean up old session
         existingPeer.webrtc?.close();
         existingPeer.fileSender?.cancel();
       }
       
       this.peers.set(peerId, {
         status: 'pending-approval',
-        progress: null,
-        joinedAt: Date.now(),
+        progress: existingPeer?.progress || null,
+        joinedAt: existingPeer?.joinedAt || Date.now(),
+        pendingResume: existingPeer?.pendingResume || null,
       });
-      this._emit();
+
+      if (shouldAutoApprove) {
+        console.log(`[MultiPeerSender] Auto-approving rejoin for peer: ${peerId}`);
+        this.approve(peerId);
+      } else {
+        this._emit();
+      }
     }));
 
     off(sig.on(MSG.RECEIVER_LEFT, ({ peerId }) => {

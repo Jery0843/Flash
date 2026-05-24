@@ -18,7 +18,37 @@ import './TransferRoom.css';
 export function TransferRoom() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, files: senderFiles, fileMetadata: initialMetadata, peerId, roomCode } = location.state || {};
+  
+  // Persistent state restoration
+  const [sessionData, setSessionData] = useState(() => {
+    const fromLocation = location.state;
+    if (fromLocation) {
+      // Save to session storage for refresh survival
+      const dataToSave = { ...fromLocation };
+      // Don't save large File objects in session storage if possible
+      // but for sender we need them. For now, try saving everything.
+      try {
+        sessionStorage.setItem('flash_transfer_session', JSON.stringify(dataToSave));
+      } catch (e) {
+        console.warn('[TransferRoom] Failed to save session state:', e);
+      }
+      return fromLocation;
+    }
+
+    // Try to restore from session storage
+    const saved = sessionStorage.getItem('flash_transfer_session');
+    if (saved) {
+      try {
+        console.log('[TransferRoom] Restoring session from storage after refresh');
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const { role, files: senderFiles, fileMetadata: initialMetadata, peerId, roomCode } = sessionData || {};
 
   const signaling = useSignaling();
   const webrtc = useWebRTC();
@@ -48,10 +78,17 @@ export function TransferRoom() {
 
   // Redirect if no state
   useEffect(() => {
-    if (!location.state) {
+    if (!sessionData) {
       navigate('/', { replace: true });
     }
-  }, [location.state, navigate]);
+  }, [sessionData, navigate]);
+
+  // Clear session on completion/cancel
+  useEffect(() => {
+    if (fileTransfer.transferState === 'completed' || roomStatus === ROOM_STATES.CANCELLED) {
+      sessionStorage.removeItem('flash_transfer_session');
+    }
+  }, [fileTransfer.transferState, roomStatus]);
 
   // WebRTC negotiation
   useEffect(() => {
@@ -93,10 +130,8 @@ export function TransferRoom() {
               
               // Restart the pump if we were in the middle of sending
               if (sender._currentPumpFile && !sender.cancelled) {
-                console.log('[TransferRoom] Restarting sender pump after reconnection');
-                sender._sending = false;
-                sender._clearResumeTimer();
-                sender._doPump();
+                console.log('[TransferRoom] Resyncing sender after reconnection');
+                sender.resync();
               }
             }
           }
@@ -349,7 +384,9 @@ export function TransferRoom() {
             >
               {displayRoomStatus === ROOM_STATES.RELAY_FALLBACK
                 ? 'Trying relay connection...'
-                : 'Establishing secure connection...'}
+                : !location.state && sessionData 
+                  ? 'Restoring session...'
+                  : 'Establishing secure connection...'}
             </motion.div>
           </motion.div>
         )}

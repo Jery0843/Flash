@@ -340,6 +340,30 @@ export class FileSender {
     }
   }
 
+  /**
+   * Re-send control messages after reconnection to sync receiver state.
+   */
+  async resync() {
+    if (this.cancelled || !this._currentPumpFile) return;
+
+    console.log('[FileSender] Resyncing state after reconnection...');
+    
+    // Re-send file_start
+    this._sendControl({
+      ctrl: 'file_start',
+      index: this.currentFileIndex,
+      name: this._currentPumpFile.name,
+      size: this._currentPumpFile.size,
+      type: this._currentPumpFile.type || 'application/octet-stream',
+      totalChunks: this.totalChunks,
+    });
+
+    // Let the pump continue (it will handle the chunks)
+    this._sending = false;
+    this._clearResumeTimer();
+    this._doPump();
+  }
+
   _sendControl(obj) {
     this.transport.send(JSON.stringify(obj));
   }
@@ -478,7 +502,6 @@ export class FileReceiver {
 
     // Current file state
     this.currentFileMeta = null;
-    this.chunks = null;
     this.receivedChunkCount = 0;
     this.receivedChunksSet = new Set(); // Optimized tracking
     this._dbUpdateTimer = null;
@@ -514,7 +537,7 @@ export class FileReceiver {
 
   cancel() {
     this.cancelled = true;
-    this.chunks = null;
+    this._fallbackChunks = null;
     this._clearDbUpdateTimer();
   }
 
@@ -538,7 +561,6 @@ export class FileReceiver {
             type: msg.type,
             totalChunks: msg.totalChunks,
           };
-          this.chunks = new Array(msg.totalChunks);
           this.receivedChunkCount = 0;
           this.receivedChunksSet.clear();
 
@@ -593,14 +615,9 @@ export class FileReceiver {
           `[FileReceiver] Found ${transfer.receivedChunks.length} chunks in IndexedDB, requesting resume`
         );
 
-        // Restore chunks into memory
-        const chunkData = await getAllChunks(this.currentFileId);
-        for (let i = 0; i < chunkData.length; i++) {
-          const idx = transfer.receivedChunks[i];
-          if (idx !== undefined) {
-            this.chunks[idx] = chunkData[i];
-            this.receivedChunksSet.add(idx);
-          }
+        // Track received chunks in the set
+        for (const idx of transfer.receivedChunks) {
+          this.receivedChunksSet.add(idx);
         }
         this.receivedChunkCount = transfer.receivedChunks.length;
 
@@ -654,7 +671,7 @@ export class FileReceiver {
   }
 
   async _handleChunk(buffer) {
-    if (!this.currentFileMeta || !this.chunks) return;
+    if (!this.currentFileMeta) return;
 
     try {
       const { index, total, data } = decodeChunk(buffer);
@@ -664,7 +681,7 @@ export class FileReceiver {
         return;
       }
 
-      if (this.chunks[index]) return;
+      if (this.receivedChunksSet.has(index)) return;
 
       // Clear resume timeout since we're receiving chunks
       if (this._resumeTimeout) {
@@ -672,18 +689,19 @@ export class FileReceiver {
         this._resumeTimeout = null;
       }
 
-      this.chunks[index] = data;
+      // Persist chunk to IndexedDB if enabled
+      if (this.currentFileId && this.dbEnabled) {
+        await saveChunk(this.currentFileId, index, data);
+        this._throttleDbUpdate();
+      } else {
+        // Fallback to RAM if DB is disabled (not recommended for large files)
+        if (!this._fallbackChunks) this._fallbackChunks = [];
+        this._fallbackChunks[index] = data;
+      }
+
       this.receivedChunkCount++;
       this.receivedChunksSet.add(index);
       this.tracker.update(data.byteLength);
-
-      // Persist chunk to IndexedDB
-      if (this.currentFileId && this.dbEnabled) {
-        // Save the actual chunk data immediately
-        await saveChunk(this.currentFileId, index, data);
-        // Throttle the update of the received chunks list (expensive for large files)
-        this._throttleDbUpdate();
-      }
 
       this.onProgress?.({
         ...this.tracker.getStats(),
@@ -694,7 +712,7 @@ export class FileReceiver {
       });
 
       if (this.receivedChunkCount === this.currentFileMeta.totalChunks) {
-        this._assembleCurrentFile();
+        await this._assembleCurrentFile();
       }
     } catch (err) {
       this.onError?.(err);
@@ -717,14 +735,22 @@ export class FileReceiver {
     }, 1000);
   }
 
-  _assembleCurrentFile() {
-    if (!this.currentFileMeta || !this.chunks) return;
+  async _assembleCurrentFile() {
+    if (!this.currentFileMeta) return;
 
     this._clearDbUpdateTimer();
 
     try {
+      let chunksToAssemble;
+      if (this.currentFileId && this.dbEnabled) {
+        console.log('[FileReceiver] Assembling file from IndexedDB...');
+        chunksToAssemble = await getAllChunks(this.currentFileId);
+      } else {
+        chunksToAssemble = this._fallbackChunks || [];
+      }
+
       const blob = new Blob(
-        this.chunks.map((chunk) => new Uint8Array(chunk)),
+        chunksToAssemble.map((chunk) => new Uint8Array(chunk)),
         { type: this.currentFileMeta.type }
       );
 
@@ -746,7 +772,7 @@ export class FileReceiver {
         });
       }
 
-      this.chunks = null;
+      this._fallbackChunks = null;
       this.currentFileMeta = null;
       this.receivedChunkCount = 0;
       this.currentFileId = null;

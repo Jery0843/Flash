@@ -25,6 +25,8 @@ export const MSG = {
   TRANSFER_CANCEL: 'transfer_cancel',
   WS_RELAY_MODE: 'ws_relay_mode',
   WS_RELAY_CHUNK: 'ws_relay_chunk',
+  FILE_RESUME_REQUEST: 'file_resume_request',
+  FILE_RESUME_ACK: 'file_resume_ack',
   PING: 'ping',
   PONG: 'pong',
 };

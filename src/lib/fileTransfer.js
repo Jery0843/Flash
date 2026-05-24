@@ -9,6 +9,7 @@ import {
   BUFFER_HIGH_WATER_MARK,
   BUFFER_LOW_WATER_MARK,
   SPEED_WINDOW_MS,
+  MSG,
 } from './constants';
 import {
   makeFileId,
@@ -171,7 +172,7 @@ export class FileSender {
       if (typeof data === 'string') {
         try {
           const msg = JSON.parse(data);
-          if (msg.ctrl === 'file_resume_request') {
+          if (msg.ctrl === MSG.FILE_RESUME_REQUEST) {
             this._handleResumeRequest(msg);
           }
         } catch (_) {
@@ -270,7 +271,7 @@ export class FileSender {
     
     // Always send ACK back to receiver
     this._sendControl({
-      ctrl: 'file_resume_ack',
+      ctrl: MSG.FILE_RESUME_ACK,
       fileIndex,
       resumeFromChunk,
     });
@@ -535,7 +536,7 @@ export class FileReceiver {
           break;
         }
 
-        case 'file_resume_ack': {
+        case MSG.FILE_RESUME_ACK: {
           // Sender acknowledged our resume request; chunks will arrive soon
           console.log('[FileReceiver] Resume acknowledged, starting from chunk', msg.resumeFromChunk);
           break;
@@ -598,7 +599,7 @@ export class FileReceiver {
         const resumeFromChunk = this.receivedChunkCount;
         if (this.signaling && this.signaling.send) {
           console.log(`[FileReceiver] Sending file_resume_request for file ${this.currentFileMeta.index} from chunk ${resumeFromChunk}`);
-          this.signaling.send('file_resume_request', {
+          this.signaling.send(MSG.FILE_RESUME_REQUEST, {
             peerId: this.peerId,
             fileIndex: this.currentFileMeta.index,
             resumeFromChunk,

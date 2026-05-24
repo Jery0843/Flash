@@ -286,7 +286,7 @@ export class MultiPeerSender {
     }));
 
     // Handle resume requests from receivers
-    off(sig.on('file_resume_request', ({ peerId, fileIndex, resumeFromChunk }) => {
+    off(sig.on(MSG.FILE_RESUME_REQUEST, ({ peerId, fileIndex, resumeFromChunk }) => {
       console.log(`[MultiPeerSender] Resume request from peer ${peerId} for file ${fileIndex} from chunk ${resumeFromChunk}`);
       const peer = this.peers.get(peerId);
       if (!peer) {

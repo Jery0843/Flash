@@ -30,6 +30,7 @@ const SENDER_TO_RECEIVER = new Set([
   MSG.ICE_CANDIDATE,
   MSG.TRANSFER_CANCEL,
   MSG.WS_RELAY_MODE,
+  MSG.FILE_RESUME_ACK,
 ]);
 
 // Messages that flow receiver → sender. Server stamps peerId.
@@ -40,6 +41,7 @@ const RECEIVER_TO_SENDER = new Set([
   MSG.ICE_CANDIDATE,
   MSG.TRANSFER_COMPLETE,
   MSG.TRANSFER_CANCEL,
+  MSG.FILE_RESUME_REQUEST,
 ]);
 
 function generatePeerId() {

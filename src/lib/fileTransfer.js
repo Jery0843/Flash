@@ -652,9 +652,6 @@ export class FileReceiver {
       }, 5000);
     }
   }
-      }, 5000);
-    }
-  }
 
   async _handleChunk(buffer) {
     if (!this.currentFileMeta || !this.chunks) return;

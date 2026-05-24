@@ -43,8 +43,9 @@ export function useFileTransfer() {
 
   // ── Receiver ────────────────────────────────────────────
 
-  const startReceiving = useCallback((manifest, dataChannel) => {
-    const receiver = new FileReceiver(manifest);
+  const startReceiving = useCallback((manifest, dataChannel, roomCode = null) => {
+    const transport = createTransport(dataChannel);
+    const receiver = new FileReceiver(manifest, transport, roomCode);
     receiverRef.current = receiver;
 
     receiver.onProgress = (s) => {

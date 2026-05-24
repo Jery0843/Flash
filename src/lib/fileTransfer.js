@@ -10,6 +10,15 @@ import {
   BUFFER_LOW_WATER_MARK,
   SPEED_WINDOW_MS,
 } from './constants';
+import {
+  makeFileId,
+  initTransfer,
+  saveChunk,
+  updateReceivedChunks,
+  getAllChunks,
+  deleteTransfer,
+  isAvailable as isDBAvailable,
+} from './transferDB';
 
 // ── Binary Header Protocol ─────────────────────────────────
 // Each chunk: [4B chunk_index] [4B total_chunks] [payload]
@@ -138,6 +147,9 @@ export class FileSender {
     this._bufferCleanup = null;
     this._resumeTimer = null;
 
+    // Resume support
+    this._controlMessageHandler = null;
+
     // Overall progress across all files
     const totalBytes = this.files.reduce((sum, f) => sum + f.size, 0);
     this.tracker = new ProgressTracker(totalBytes);
@@ -147,6 +159,48 @@ export class FileSender {
     this.onComplete = null;
     this.onError = null;
     this.onFileStart = null;
+
+    // Listen for control messages from receiver
+    this._setupControlListener();
+  }
+
+  _setupControlListener() {
+    if (!this.transport.on) return;
+
+    this._controlMessageHandler = (data) => {
+      if (typeof data === 'string') {
+        try {
+          const msg = JSON.parse(data);
+          if (msg.ctrl === 'file_resume_request') {
+            this._handleResumeRequest(msg);
+          }
+        } catch (err) {
+          // Ignore parse errors
+        }
+      }
+    };
+
+    // Note: This assumes the transport emits messages via an event emitter
+    // For WebRTC, we'll need to wire this up differently in the integration layer
+  }
+
+  _handleResumeRequest(msg) {
+    const { fileIndex, resumeFromChunk } = msg;
+    console.log(`[FileSender] Resume request for file ${fileIndex} from chunk ${resumeFromChunk}`);
+
+    // If we're currently sending the requested file, restart from the chunk
+    if (fileIndex === this.currentFileIndex && this._sending) {
+      this.currentChunk = resumeFromChunk;
+      this._sending = false;
+      this._scheduleResume(0);
+    }
+
+    // Send acknowledgment
+    this._sendControl({
+      ctrl: 'file_resume_ack',
+      fileIndex,
+      resumeFromChunk,
+    });
   }
 
   getManifest() {
@@ -162,7 +216,7 @@ export class FileSender {
     };
   }
 
-  async start() {
+  async start(resumeFromChunk = 0) {
     if (this._sending) return;
 
     if (this.transport.setBufferThreshold) {
@@ -174,7 +228,7 @@ export class FileSender {
     });
 
     try {
-      await this._sendAllFiles();
+      await this._sendAllFiles(resumeFromChunk);
     } catch (err) {
       if (!this.cancelled) {
         this.onError?.(err);
@@ -200,14 +254,16 @@ export class FileSender {
     this._bufferCleanup?.();
   }
 
-  async _sendAllFiles() {
+  async _sendAllFiles(resumeFromChunk = 0) {
     for (let i = 0; i < this.files.length; i++) {
       if (this.cancelled) return;
 
       this.currentFileIndex = i;
       const file = this.files[i];
       this.totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-      this.currentChunk = 0;
+
+      // Support resuming from a specific chunk
+      this.currentChunk = Math.min(resumeFromChunk, this.totalChunks);
 
       // Send file_start control message
       this._sendControl({
@@ -221,7 +277,13 @@ export class FileSender {
 
       this.onFileStart?.(i, file.name);
 
-      // Send all chunks for this file
+      // If resuming, update tracker to reflect already-transferred bytes
+      const alreadyTransferred = this.currentChunk * CHUNK_SIZE;
+      if (alreadyTransferred > 0) {
+        this.tracker.update(alreadyTransferred);
+      }
+
+      // Send all remaining chunks for this file
       await this._pumpFile(file);
 
       if (this.cancelled) return;
@@ -355,13 +417,22 @@ export class FileSender {
 export class FileReceiver {
   /**
    * @param {object} manifest - { files: [{name, size, type, totalChunks}], totalSize, totalFiles }
+   * @param {object} [transport] - Optional transport for sending resume requests
+   * @param {string} [roomCode] - Optional room code for generating persistent fileIds
    */
-  constructor(manifest) {
+  constructor(manifest, transport = null, roomCode = null) {
     this.manifest = manifest;
     this.totalSize = manifest.totalSize;
     this.totalFiles = manifest.totalFiles;
     this.receivedFiles = [];
     this.tracker = new ProgressTracker(this.totalSize);
+
+    // Resume support
+    this.transport = transport;
+    this.roomCode = roomCode;
+    this.dbEnabled = false;
+    this.currentFileId = null;
+    this.pendingChunks = new Set();
 
     // Current file state
     this.currentFileMeta = null;
@@ -374,6 +445,13 @@ export class FileReceiver {
     this.onFileComplete = null;
     this.onComplete = null;
     this.onError = null;
+
+    // Initialize DB support
+    this._initDB();
+  }
+
+  async _initDB() {
+    this.dbEnabled = await isDBAvailable();
   }
 
   /**
@@ -400,7 +478,7 @@ export class FileReceiver {
       const msg = JSON.parse(raw);
 
       switch (msg.ctrl) {
-        case 'file_start':
+        case 'file_start': {
           this.currentFileMeta = {
             index: msg.index,
             name: msg.name,
@@ -410,7 +488,20 @@ export class FileReceiver {
           };
           this.chunks = new Array(msg.totalChunks);
           this.receivedChunkCount = 0;
+
+          // Check IndexedDB for existing chunks to resume
+          if (this.roomCode && this.dbEnabled) {
+            this.currentFileId = makeFileId(this.roomCode, msg.name, msg.size);
+            this._tryResume();
+          }
           break;
+        }
+
+        case 'file_resume_ack': {
+          // Sender acknowledged our resume request; chunks will arrive soon
+          console.log('[FileReceiver] Resume acknowledged, starting from chunk', msg.resumeFromChunk);
+          break;
+        }
 
         case 'file_end':
           if (this.currentFileMeta && this.receivedChunkCount === this.currentFileMeta.totalChunks) {
@@ -418,12 +509,13 @@ export class FileReceiver {
           }
           break;
 
-        case 'all_complete':
+        case 'all_complete': {
           this.onComplete?.({
             files: this.receivedFiles,
             stats: this.tracker.getStats(),
           });
           break;
+        }
 
         default:
           console.warn('[FileReceiver] Unknown control message:', msg.ctrl);
@@ -433,7 +525,53 @@ export class FileReceiver {
     }
   }
 
-  _handleChunk(buffer) {
+  async _tryResume() {
+    try {
+      const transfer = await initTransfer({
+        fileId: this.currentFileId,
+        name: this.currentFileMeta.name,
+        size: this.currentFileMeta.size,
+        type: this.currentFileMeta.type,
+        totalChunks: this.currentFileMeta.totalChunks,
+      });
+
+      if (transfer && transfer.receivedChunks.length > 0) {
+        console.log(
+          `[FileReceiver] Found ${transfer.receivedChunks.length} chunks in IndexedDB, requesting resume`
+        );
+
+        // Restore chunks into memory
+        const chunkData = await getAllChunks(this.currentFileId);
+        for (let i = 0; i < chunkData.length; i++) {
+          const idx = transfer.receivedChunks[i];
+          if (idx !== undefined) {
+            this.chunks[idx] = chunkData[i];
+          }
+        }
+        this.receivedChunkCount = transfer.receivedChunks.length;
+
+        // Update tracker
+        const alreadyTransferred = this.receivedChunkCount * CHUNK_SIZE;
+        if (alreadyTransferred > 0) {
+          this.tracker.update(Math.min(alreadyTransferred, this.currentFileMeta.size));
+        }
+
+        // Send resume request to sender
+        const resumeFromChunk = this.receivedChunkCount;
+        if (this.transport) {
+          this.transport.send(JSON.stringify({
+            ctrl: 'file_resume_request',
+            fileIndex: this.currentFileMeta.index,
+            resumeFromChunk,
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('[FileReceiver] Resume check failed:', err);
+    }
+  }
+
+  async _handleChunk(buffer) {
     if (!this.currentFileMeta || !this.chunks) return;
 
     try {
@@ -449,6 +587,12 @@ export class FileReceiver {
       this.chunks[index] = data;
       this.receivedChunkCount++;
       this.tracker.update(data.byteLength);
+
+      // Persist chunk to IndexedDB
+      if (this.currentFileId && this.dbEnabled) {
+        await saveChunk(this.currentFileId, index, data);
+        await updateReceivedChunks(this.currentFileId, this.chunks.map((c, i) => c ? i : null).filter(i => i !== null));
+      }
 
       this.onProgress?.({
         ...this.tracker.getStats(),
@@ -486,9 +630,17 @@ export class FileReceiver {
       this.receivedFiles.push(fileResult);
       this.onFileComplete?.(this.currentFileMeta.index, fileResult);
 
+      // Clean up IndexedDB for completed file
+      if (this.currentFileId && this.dbEnabled) {
+        deleteTransfer(this.currentFileId).catch((err) => {
+          console.warn('[FileReceiver] Failed to cleanup IndexedDB:', err);
+        });
+      }
+
       this.chunks = null;
       this.currentFileMeta = null;
       this.receivedChunkCount = 0;
+      this.currentFileId = null;
     } catch (err) {
       this.onError?.(err);
     }

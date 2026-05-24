@@ -17,7 +17,7 @@ import './TransferRoom.css';
 export function TransferRoom() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, files: senderFiles, fileMetadata: initialMetadata, peerId } = location.state || {};
+  const { role, files: senderFiles, fileMetadata: initialMetadata, peerId, roomCode } = location.state || {};
 
   const signaling = useSignaling();
   const webrtc = useWebRTC();
@@ -79,7 +79,7 @@ export function TransferRoom() {
             fileTransfer.startSending(senderFiles, manager.dataChannel);
           }
           if (!isSender && initialMetadata) {
-            fileTransfer.startReceiving(initialMetadata, manager.dataChannel);
+            fileTransfer.startReceiving(initialMetadata, manager.dataChannel, roomCode);
           }
         });
 

@@ -180,10 +180,24 @@ export class MultiPeerSender {
     const off = (fn) => { if (typeof fn === 'function') this._unsubs.push(fn); };
     const sig = this.signaling;
 
-    off(sig.on(MSG.RECEIVER_JOINED, ({ peerId }) => {
+    off(sig.on(MSG.RECEIVER_JOINED, ({ peerId, isRejoin }) => {
       if (!peerId) return;
       
       const existingPeer = this.peers.get(peerId);
+
+      // isRejoin=true means the server confirmed this is the same peer
+      // reconnecting with the same peerId — skip approval entirely.
+      if (isRejoin && existingPeer) {
+        console.log(`[MultiPeerSender] Peer ${peerId} rejoined (same peerId), auto-approving silently`);
+        // Clean up old WebRTC session but keep progress/state
+        existingPeer.webrtc?.close();
+        existingPeer.fileSender?.cancel();
+        existingPeer.status = 'connecting';
+        this._emit();
+        this.approve(peerId);
+        return;
+      }
+
       let shouldAutoApprove = false;
 
       if (existingPeer) {

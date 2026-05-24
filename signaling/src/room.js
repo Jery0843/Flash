@@ -140,25 +140,31 @@ export class SignalingRoom {
         return new Response(null, { status: 101, webSocket: client });
       }
 
-      // Allocate a peerId for this receiver and stash it on the WebSocket.
-      const peerId = generatePeerId();
+      // If the receiver is reconnecting with an existing peerId, reuse it.
+      // This avoids triggering a new approval flow on the sender side.
+      const existingPeerId = url.searchParams.get('peerId');
+      const isRejoin = existingPeerId && this.state.peers?.[existingPeerId];
+      const peerId = isRejoin ? existingPeerId : generatePeerId();
+
       this.ctx.acceptWebSocket(server, ['receiver', `peer:${peerId}`]);
       server.serializeAttachment({ peerId });
 
-      this.state.peers[peerId] = { joinedAt: Date.now() };
-      await this._persist();
+      if (!isRejoin) {
+        this.state.peers[peerId] = { joinedAt: Date.now() };
+        await this._persist();
+      }
 
       server.send(JSON.stringify({
         type: MSG.ROOM_JOINED,
-        payload: { token: roomCode, peerId },
+        payload: { token: roomCode, peerId, isRejoin: !!isRejoin },
       }));
 
-      // Notify sender(s) that a new receiver joined.
+      // Notify sender(s) that a receiver joined (or rejoined).
       for (const s of senders) {
         try {
           s.send(JSON.stringify({
             type: MSG.RECEIVER_JOINED,
-            payload: { peerId },
+            payload: { peerId, isRejoin: !!isRejoin },
           }));
         } catch { /* socket may be closed */ }
       }

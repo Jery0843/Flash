@@ -110,17 +110,13 @@ export function TransferRoom() {
                 receiver.handleMessage(event.data);
               };
               
-              // Trigger resume request if we have a current file in progress
               if (receiver.currentFileMeta && receiver.currentFileId) {
+                // Transfer was in progress — request resume from sender
                 console.log('[TransferRoom] Triggering resume after reconnection');
                 receiver.triggerResume();
-              } else if (receiver.receivedFiles.length === 0) {
-                // No files received yet and no current file - this might be initial connection
-                console.log('[TransferRoom] Receiver reconnected but no transfer state, waiting for file_start');
-              } else {
-                // We have received some files but no current file - might need to resume next file
-                console.log('[TransferRoom] Receiver reconnected, waiting for next file_start');
               }
+              // If no currentFileMeta, the sender will re-send file_start
+              // automatically when its pump restarts (handled on sender side)
             }
           }
         });

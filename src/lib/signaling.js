@@ -26,6 +26,8 @@ export class SignalingClient {
     this.lastQueryParams = {};
     this.lastQueryKey = '';
     this.connectionVersion = 0;
+    // Stored peerId for reconnection — lets the server reuse the same peer slot
+    this.peerId = null;
   }
 
   /**
@@ -44,6 +46,12 @@ export class SignalingClient {
 
       if (this.ws && this.lastQueryKey !== nextQueryKey) {
         this._closeSocket({ intentional: true, suppressDisconnectEvent: true, reason: 'Switching rooms' });
+      }
+
+      // If reconnecting as a receiver and we already have a peerId, inject it
+      // so the server can reuse the same peer slot instead of creating a new one.
+      if (normalizedParams.action === 'join' && this.peerId && !normalizedParams.peerId) {
+        normalizedParams.peerId = this.peerId;
       }
 
       this.lastQueryParams = normalizedParams;
@@ -201,6 +209,7 @@ export class SignalingClient {
     this.pendingEvents.clear();
     this.token = null;
     this.roomCode = null;
+    this.peerId = null;
     this.lastQueryParams = {};
     this.lastQueryKey = '';
     this.connectionVersion = 0;
@@ -234,6 +243,10 @@ export class SignalingClient {
         this.roomCode = payload.roomCode;
       } else if (type === MSG.ROOM_JOINED) {
         this.token = payload.token;
+        // Store peerId so we can pass it back on reconnect and reuse the same slot
+        if (payload.peerId) {
+          this.peerId = payload.peerId;
+        }
       }
 
       this._emit(type, payload);

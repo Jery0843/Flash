@@ -74,12 +74,12 @@ export function Home() {
   };
 
   const features = [
-    { icon: <Shield size={32} className="feature-icon" />, title: "End-to-End Encryption", desc: "Your files never touch a server. Direct peer-to-peer connections guarantee absolute privacy." },
-    { icon: <Zap size={32} className="feature-icon" />, title: "Lightning Fast", desc: "Bypass server bottlenecks. Experience maximum speeds through direct WebRTC connections." },
-    { icon: <HardDrive size={32} className="feature-icon" />, title: "Massive File Support", desc: "Send files up to 25GB seamlessly. Ideal for high-res videos, archives, and large project folders." },
-    { icon: <Globe size={32} className="feature-icon" />, title: "Cross-Platform", desc: "Seamlessly transfer across desktop, mobile, and tablet. Fully compatible with Windows, Mac, Linux, iOS, and Android." },
+    { icon: <Shield size={32} className="feature-icon" />, title: "Absolute Privacy", desc: "Your files never touch a server. Direct peer-to-peer connections mean nobody else can access your data." },
+    { icon: <Zap size={32} className="feature-icon" />, title: "Lightning Fast", desc: "Experience maximum transfer speeds through direct WebRTC connections without server bottlenecks." },
+    { icon: <HardDrive size={32} className="feature-icon" />, title: "Massive File Support", desc: "Send files up to 25GB with ease. Perfect for high-res videos, large archives, and project folders." },
+    { icon: <Globe size={32} className="feature-icon" />, title: "Cross-Platform", desc: "Works seamlessly on all your devices. Fully compatible with Windows, Mac, Linux, iOS, and Android." },
     { icon: <UserX size={32} className="feature-icon" />, title: "No Account Required", desc: "Skip the sign-up process. No personal information required—just open the app and start sharing." },
-    { icon: <Gift size={32} className="feature-icon" />, title: "100% Free", desc: "Enjoy unlimited transfers without subscriptions or hidden fees. Completely free to use." }
+    { icon: <Gift size={32} className="feature-icon" />, title: "100% Free", desc: "Enjoy unlimited transfers without any subscriptions or hidden fees. Completely free to use, forever." }
   ];
 
   const comparisons = [
@@ -117,7 +117,7 @@ export function Home() {
           FLASH
         </motion.h1>
         <motion.p className="home-subtitle" variants={staggerItem}>
-          Instant, browser-to-browser file transfers. No uploads, no storage limits, just secure P2P sharing.
+          Send files instantly from your browser to theirs. No servers, no storage limits, totally secure.
         </motion.p>
 
         <motion.div className="home-actions" variants={staggerItem}>

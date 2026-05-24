@@ -116,7 +116,7 @@ export function isDangerousFile(filename) {
  */
 export function validateRoomCode(code) {
   if (!code || typeof code !== 'string') return false;
-  return /^[A-Z2-9]{6}$/.test(code.toUpperCase());
+  return /^[A-Z2-9]{8}$/.test(code.toUpperCase());
 }
 
 /**

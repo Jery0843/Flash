@@ -49,7 +49,7 @@ export function validateMessage(raw) {
       if (!payload.roomCode || typeof payload.roomCode !== 'string') {
         return { valid: false, error: 'Missing room code' };
       }
-      if (!/^[A-Z2-9]{6}$/.test(payload.roomCode)) {
+      if (!/^[A-Z2-9]{8}$/.test(payload.roomCode)) {
         return { valid: false, error: 'Invalid room code format' };
       }
       break;

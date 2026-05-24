@@ -84,7 +84,7 @@ export function JoinRoom() {
   const joinRoom = useCallback(async () => {
     const cleanCode = code.toUpperCase().trim();
     if (!validateRoomCode(cleanCode)) {
-      setError('Enter a valid 6-character room code');
+      setError('Enter a valid 8-character room code');
       return;
     }
     setJoining(true);
@@ -123,13 +123,13 @@ export function JoinRoom() {
   }, [signaling]);
 
   const handleCodeChange = (e) => {
-    const val = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 6);
+    const val = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 8);
     setCode(val);
     setError(null);
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && code.length === 6) {
+    if (e.key === 'Enter' && code.length === 8) {
       joinRoom();
     }
   };
@@ -201,8 +201,8 @@ export function JoinRoom() {
             value={code}
             onChange={handleCodeChange}
             onKeyDown={handleKeyDown}
-            placeholder="ABC123"
-            maxLength={6}
+            placeholder="ABCD1234"
+            maxLength={8}
             autoFocus
             disabled={joining || roomStatus === ROOM_STATES.RECEIVER_JOINED}
             id="join-code-input"
@@ -251,7 +251,7 @@ export function JoinRoom() {
           <motion.button
             className="btn btn-primary btn-lg"
             onClick={joinRoom}
-            disabled={code.length !== 6 || joining || roomStatus === ROOM_STATES.RECEIVER_JOINED}
+            disabled={code.length !== 8 || joining || roomStatus === ROOM_STATES.RECEIVER_JOINED}
             id="join-room-btn"
             whileHover={{ scale: 1.02, boxShadow: '0 0 40px rgba(0, 243, 255, 0.5)' }}
             whileTap={{ scale: 0.98 }}

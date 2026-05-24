@@ -519,6 +519,23 @@ export class FileReceiver {
 
   async _initDB() {
     this.dbEnabled = await isDBAvailable();
+    
+    // Check if we have enough storage quota for this transfer
+    if (this.dbEnabled && navigator.storage && navigator.storage.estimate) {
+      try {
+        const estimate = await navigator.storage.estimate();
+        const available = estimate.quota - estimate.usage;
+        const needed = this.totalSize;
+        
+        console.log(`[FileReceiver] Storage: ${(available / 1024 / 1024 / 1024).toFixed(2)} GB available, ${(needed / 1024 / 1024 / 1024).toFixed(2)} GB needed`);
+        
+        if (available < needed) {
+          console.warn(`[FileReceiver] Insufficient storage: need ${(needed / 1024 / 1024 / 1024).toFixed(2)} GB but only ${(available / 1024 / 1024 / 1024).toFixed(2)} GB available`);
+        }
+      } catch (err) {
+        console.warn('[FileReceiver] Could not estimate storage:', err);
+      }
+    }
   }
 
   /**
@@ -689,12 +706,20 @@ export class FileReceiver {
         this._resumeTimeout = null;
       }
 
-      // Persist chunk to IndexedDB if enabled
+      // CRITICAL: For large files, we MUST use IndexedDB. RAM fallback will crash the browser.
       if (this.currentFileId && this.dbEnabled) {
-        await saveChunk(this.currentFileId, index, data);
+        const saved = await saveChunk(this.currentFileId, index, data);
+        if (!saved) {
+          // IndexedDB write failed (likely quota exceeded)
+          console.error('[FileReceiver] IndexedDB write failed for chunk', index, '- storage quota may be exceeded');
+          this.onError?.(new Error('Storage quota exceeded. Please free up disk space and try again.'));
+          this.cancel();
+          return;
+        }
         this._throttleDbUpdate();
       } else {
-        // Fallback to RAM if DB is disabled (not recommended for large files)
+        // IndexedDB not available - this will fail for large files
+        console.warn('[FileReceiver] IndexedDB not available, using RAM fallback (will fail for large files)');
         if (!this._fallbackChunks) this._fallbackChunks = [];
         this._fallbackChunks[index] = data;
       }

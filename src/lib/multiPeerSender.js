@@ -67,6 +67,13 @@ export class MultiPeerSender {
 
       webrtc.on('connection-failed', () => {
         if (peer.status === 'completed') return;
+        // Don't fail immediately if it's a re-join
+        if (peer.status === 'transferring' || peer.status === 'connecting') {
+           console.log(`[MultiPeerSender] Connection failed for peer ${peerId}, waiting for re-join...`);
+           peer.status = 'disconnected';
+           this._emit();
+           return;
+        }
         peer.status = 'failed';
         peer.error = 'WebRTC connection failed';
         this._emit();
@@ -242,9 +249,12 @@ export class MultiPeerSender {
       try {
         await peer.webrtc.handleAnswer(sdp);
       } catch (err) {
-        peer.status = 'failed';
-        peer.error = err?.message || 'SDP answer failed';
-        this._emit();
+        // Only fail if not already disconnected (waiting for rejoin)
+        if (peer.status !== 'disconnected') {
+          peer.status = 'failed';
+          peer.error = err?.message || 'SDP answer failed';
+          this._emit();
+        }
       }
     }));
 

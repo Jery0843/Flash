@@ -29,7 +29,7 @@ export class WebRTCManager {
     this.isInitiator = false;
     this.keepaliveInterval = null;
     this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 3;
+    this.maxReconnectAttempts = 20; // Increased from 3 to allow longer retry windows
     this.reconnectDelay = 2000;
   }
 
@@ -67,12 +67,14 @@ export class WebRTCManager {
         this._attemptReconnection();
       } else if (state === 'disconnected') {
         // WebRTC may recover automatically; wait before reporting
-        // Increased from 5s to 30s to handle transient network issues
+        // For receivers, we want to be more aggressive with re-connecting
+        // For senders, we wait a bit longer.
+        const timeout = this.isInitiator ? 30000 : 10000;
         setTimeout(() => {
           if (this.pc?.iceConnectionState === 'disconnected') {
             this._attemptReconnection();
           }
-        }, 30000);
+        }, timeout);
       }
     };
 

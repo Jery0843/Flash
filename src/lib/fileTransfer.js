@@ -253,13 +253,27 @@ export class FileSender {
 
   setResumePosition(fileIndex, resumeFromChunk) {
     console.log(`[FileSender] setResumePosition called for file ${fileIndex} from chunk ${resumeFromChunk}`);
-    if (fileIndex === this.currentFileIndex && this._sending) {
+    
+    // Always update current position if it's the current file
+    if (fileIndex === this.currentFileIndex) {
       this.currentChunk = resumeFromChunk;
-      this._sending = false;
-      this._scheduleResume(0);
-    } else if (fileIndex < this.currentFileIndex || fileIndex > this.currentFileIndex) {
+      
+      // If we were in the middle of sending, restart the pump
+      if (this._sending) {
+        this._sending = false;
+        this._scheduleResume(0);
+      }
+    } else {
+      // Store for when _sendAllFiles gets to this file index
       this._pendingResume = { fileIndex, resumeFromChunk };
     }
+    
+    // Always send ACK back to receiver
+    this._sendControl({
+      ctrl: 'file_resume_ack',
+      fileIndex,
+      resumeFromChunk,
+    });
   }
 
   cancel() {
@@ -583,6 +597,7 @@ export class FileReceiver {
         // Send resume request to sender via signaling
         const resumeFromChunk = this.receivedChunkCount;
         if (this.signaling && this.signaling.send) {
+          console.log(`[FileReceiver] Sending file_resume_request for file ${this.currentFileMeta.index} from chunk ${resumeFromChunk}`);
           this.signaling.send('file_resume_request', {
             peerId: this.peerId,
             fileIndex: this.currentFileMeta.index,

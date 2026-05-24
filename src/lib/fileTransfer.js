@@ -181,8 +181,7 @@ export class FileSender {
       }
     };
 
-    // Note: This assumes the transport emits messages via an event emitter
-    // For WebRTC, we'll need to wire this up differently in the integration layer
+    this.transport.on('message', this._controlMessageHandler);
   }
 
   _handleResumeRequest(msg) {
@@ -481,6 +480,8 @@ export class FileReceiver {
     this.currentFileMeta = null;
     this.chunks = null;
     this.receivedChunkCount = 0;
+    this.receivedChunksSet = new Set(); // Optimized tracking
+    this._dbUpdateTimer = null;
     this.cancelled = false;
 
     // Callbacks
@@ -514,6 +515,14 @@ export class FileReceiver {
   cancel() {
     this.cancelled = true;
     this.chunks = null;
+    this._clearDbUpdateTimer();
+  }
+
+  _clearDbUpdateTimer() {
+    if (this._dbUpdateTimer) {
+      clearTimeout(this._dbUpdateTimer);
+      this._dbUpdateTimer = null;
+    }
   }
 
   _handleControl(raw) {
@@ -531,6 +540,7 @@ export class FileReceiver {
           };
           this.chunks = new Array(msg.totalChunks);
           this.receivedChunkCount = 0;
+          this.receivedChunksSet.clear();
 
           // Check IndexedDB for existing chunks to resume
           if (this.roomCode && this.dbEnabled) {
@@ -589,6 +599,7 @@ export class FileReceiver {
           const idx = transfer.receivedChunks[i];
           if (idx !== undefined) {
             this.chunks[idx] = chunkData[i];
+            this.receivedChunksSet.add(idx);
           }
         }
         this.receivedChunkCount = transfer.receivedChunks.length;
@@ -623,7 +634,7 @@ export class FileReceiver {
       console.log('[FileReceiver] Manually triggering resume after reconnection');
       await this._tryResume();
       
-      // Set a timeout to retry if no chunks arrive
+      // Set a timeout to retry if no chunks arrive (maybe the request was lost)
       if (this._resumeTimeout) {
         clearTimeout(this._resumeTimeout);
       }
@@ -632,10 +643,15 @@ export class FileReceiver {
       this._resumeTimeout = setTimeout(() => {
         // If we haven't received any new chunks in 5 seconds, try again
         if (this.receivedChunkCount === lastChunkCount && 
-            this.receivedChunkCount < this.currentFileMeta.totalChunks) {
+            this.currentFileMeta && 
+            this.receivedChunkCount < this.currentFileMeta.totalChunks &&
+            !this.cancelled) {
           console.log('[FileReceiver] No chunks received after resume, retrying...');
-          this._tryResume();
+          this.triggerResume();
         }
+      }, 5000);
+    }
+  }
       }, 5000);
     }
   }
@@ -661,12 +677,15 @@ export class FileReceiver {
 
       this.chunks[index] = data;
       this.receivedChunkCount++;
+      this.receivedChunksSet.add(index);
       this.tracker.update(data.byteLength);
 
       // Persist chunk to IndexedDB
       if (this.currentFileId && this.dbEnabled) {
+        // Save the actual chunk data immediately
         await saveChunk(this.currentFileId, index, data);
-        await updateReceivedChunks(this.currentFileId, this.chunks.map((c, i) => c ? i : null).filter(i => i !== null));
+        // Throttle the update of the received chunks list (expensive for large files)
+        this._throttleDbUpdate();
       }
 
       this.onProgress?.({
@@ -685,8 +704,26 @@ export class FileReceiver {
     }
   }
 
+  _throttleDbUpdate() {
+    if (this._dbUpdateTimer) return;
+
+    // Update DB every 1000ms or when complete
+    this._dbUpdateTimer = setTimeout(async () => {
+      this._dbUpdateTimer = null;
+      if (!this.currentFileId || this.cancelled) return;
+      
+      try {
+        await updateReceivedChunks(this.currentFileId, Array.from(this.receivedChunksSet));
+      } catch (err) {
+        console.warn('[FileReceiver] Failed to update received chunks list:', err);
+      }
+    }, 1000);
+  }
+
   _assembleCurrentFile() {
     if (!this.currentFileMeta || !this.chunks) return;
+
+    this._clearDbUpdateTimer();
 
     try {
       const blob = new Blob(

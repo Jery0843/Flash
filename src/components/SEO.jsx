@@ -1,15 +1,15 @@
 import { Helmet } from 'react-helmet-async';
 
-export function SEO({ title, description, url, breadcrumbs, type = 'website', image = '/og-image.png' }) {
+export function SEO({ title, description, url, breadcrumbs, type = 'website', image = '/og-image.png', faqData = null, howToData = null }) {
   const siteName = 'Flash File Transfer';
   const fullTitle = title ? `${title} | ${siteName}` : siteName;
-  const defaultDesc = 'Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing. Transfer files directly between devices with end-to-end encryption.';
+  const defaultDesc = 'Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing. Transfer files directly between devices with end-to-end encryption. Send large files up to 25GB for free without size limits.';
   const metaDesc = description || defaultDesc;
   const canonicalUrl = url ? `https://flash-4n9.pages.dev${url}` : 'https://flash-4n9.pages.dev';
   const imageUrl = `https://flash-4n9.pages.dev${image}`;
   
-  // Keywords for SEO
-  const keywords = 'file transfer, P2P sharing, secure file sharing, browser to browser, peer to peer, instant transfer, no upload, direct transfer, encrypted file transfer';
+  // Expanded keywords for SEO
+  const keywords = 'file transfer, P2P sharing, secure file sharing, browser to browser, peer to peer, instant transfer, no upload, direct transfer, encrypted file transfer, large file transfer, send files free, share files online, file sharing service, P2P file transfer, WebRTC file transfer, secure file sharing, end-to-end encryption, unlimited file size, fast file transfer, cross-platform file sharing, mobile file transfer, desktop file sharing';
 
   // JSON-LD structured data for Breadcrumbs if provided
   const breadcrumbSchema = breadcrumbs ? {
@@ -33,9 +33,47 @@ export function SEO({ title, description, url, breadcrumbs, type = 'website', im
     publisher: {
       '@type': 'Organization',
       name: siteName,
-      url: 'https://flash-4n9.pages.dev'
+      url: 'https://flash-4n9.pages.dev',
+      logo: {
+        '@type': 'ImageObject',
+        url: 'https://flash-4n9.pages.dev/logo.png'
+      }
+    },
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: 'https://flash-4n9.pages.dev/search?q={search_term_string}',
+      'query-input': 'required name=search_term_string'
     }
   };
+
+  // FAQ Schema for rich snippets
+  const faqSchema = faqData ? {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqData.map(faq => ({
+      '@type': 'Question',
+      name: faq.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: faq.answer
+      }
+    }))
+  } : null;
+
+  // How-to Schema for instructions
+  const howToSchema = howToData ? {
+    '@context': 'https://schema.org',
+    '@type': 'HowTo',
+    name: howToData.name,
+    description: howToData.description,
+    step: howToData.steps.map((step, index) => ({
+      '@type': 'HowToStep',
+      position: index + 1,
+      name: step.name,
+      text: step.text,
+      image: step.image || undefined
+    }))
+  } : null;
 
   return (
     <Helmet>
@@ -82,6 +120,16 @@ export function SEO({ title, description, url, breadcrumbs, type = 'website', im
       {breadcrumbSchema && (
         <script type="application/ld+json">
           {JSON.stringify(breadcrumbSchema)}
+        </script>
+      )}
+      {faqSchema && (
+        <script type="application/ld+json">
+          {JSON.stringify(faqSchema)}
+        </script>
+      )}
+      {howToSchema && (
+        <script type="application/ld+json">
+          {JSON.stringify(howToSchema)}
         </script>
       )}
     </Helmet>

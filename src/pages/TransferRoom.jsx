@@ -69,7 +69,10 @@ export function TransferRoom() {
 
         // Wire up ICE candidates
         manager.on('ice-candidate', (candidate) => {
-          signaling.send(MSG.ICE_CANDIDATE, { candidate });
+          signaling.send(MSG.ICE_CANDIDATE, { 
+            candidate, 
+            targetPeerId: isSender ? peerId : undefined // For receiver, server routes to sender automatically
+          });
         });
 
         // Wire up connection events

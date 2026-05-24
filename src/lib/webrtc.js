@@ -128,6 +128,11 @@ export class WebRTCManager {
    * Handle a received SDP answer (sender).
    */
   async handleAnswer(answer) {
+    if (!this.pc) return;
+    if (this.pc.signalingState !== 'have-local-offer') {
+      console.warn('[WebRTC] Ignoring answer: PC is in state', this.pc.signalingState);
+      return;
+    }
     await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
   }
 

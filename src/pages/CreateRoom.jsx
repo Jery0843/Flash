@@ -35,9 +35,11 @@ export function CreateRoom() {
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.data && event.data.type === 'SHARE_TARGET_FILES') {
+        console.log('[CreateRoom] Received shared files:', event.data.files);
         const sharedFiles = event.data.files;
         if (sharedFiles && sharedFiles.length > 0) {
           setFiles(prev => [...prev, ...sharedFiles]);
+          // Acknowledge receipt if needed
         }
       }
     };

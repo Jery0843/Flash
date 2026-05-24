@@ -1,16 +1,26 @@
 {
+  "id": "com.flash.p2p.transfer",
   "name": "Flash File Transfer",
   "short_name": "Flash",
   "description": "Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#00f3ff",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
       "src": "/favicon.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "share_target": {
@@ -21,7 +31,15 @@
       "files": [
         {
           "name": "files",
-          "accept": ["*/*"]
+          "accept": [
+            "*/*",
+            "image/*",
+            "video/*",
+            "audio/*",
+            "application/pdf",
+            "text/*",
+            "application/zip"
+          ]
         }
       ]
     }

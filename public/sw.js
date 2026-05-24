@@ -19,30 +19,28 @@ self.addEventListener('fetch', (event) => {
       const data = await event.request.formData();
       const files = data.getAll('files');
       
-      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      // Wait for the new window to be ready
-      let client;
-      if (clients.length > 0) {
-        client = clients[0];
-      } else {
-        // This case shouldn't really happen with the redirect above but just in case
-        return;
-      }
-
-      // We need to wait a bit for the page to load and register its message listener
-      // Alternatively, we store files in IndexedDB and the page picks them up
-      // For now, let's try a simple message with a retry or use a reliable store
-      const sendFiles = async (attempts = 0) => {
-        if (attempts > 10) return;
-        client.postMessage({
-          type: 'SHARE_TARGET_FILES',
-          files: files
-        });
-        // Check if acknowledged? For simplicity, we'll just try once or use IndexedDB
+      // We'll wait for a client to be ready and send the files
+      // A more robust way is to use a broadcast channel or a shared state
+      const waitForClientAndSend = async () => {
+        let attempts = 0;
+        while (attempts < 20) {
+          const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+          const client = clients.find(c => new URL(c.url).pathname === '/create');
+          
+          if (client) {
+            client.postMessage({
+              type: 'SHARE_TARGET_FILES',
+              files: files
+            });
+            return;
+          }
+          
+          await new Promise(r => setTimeout(r, 500));
+          attempts++;
+        }
       };
       
-      // Let's use a small delay to ensure the page is ready
-      setTimeout(() => sendFiles(), 1000);
+      await waitForClientAndSend();
     }());
     return;
   }

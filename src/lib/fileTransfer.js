@@ -766,6 +766,8 @@ export class FileReceiver {
         this._resumeTimeout = null;
       }
 
+      const chunkSize = data.byteLength;
+
       if (this.currentFileId && this.dbEnabled) {
         const saved = await saveChunk(this.currentFileId, index, data);
         if (!saved) {
@@ -795,7 +797,7 @@ export class FileReceiver {
 
       this.receivedChunkCount++;
       this.receivedChunksSet.add(index);
-      this.tracker.update(data.byteLength);
+      this.tracker.update(chunkSize);
 
       this.onProgress?.({
         ...this.tracker.getStats(),

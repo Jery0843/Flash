@@ -11,6 +11,7 @@ export function useFileTransfer() {
   const [stats, setStats] = useState(null);
   const [receivedFiles, setReceivedFiles] = useState([]);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
+  const lastProgressRef = useRef({ bytes: 0, ts: 0 });
 
   // ── Wake Lock ───────────────────────────────────────────
 
@@ -131,8 +132,38 @@ export function useFileTransfer() {
   useEffect(() => {
     if (stats && (transferState === 'sending' || transferState === 'receiving')) {
       updateNotification(stats, transferState);
+
+      if (transferState === 'receiving') {
+        lastProgressRef.current = {
+          bytes: stats.bytesTransferred || 0,
+          ts: Date.now(),
+        };
+      }
     }
   }, [stats, transferState, updateNotification]);
+
+  // iOS Safari can keep DataChannel "open" after backgrounding while chunks stop.
+  // Watch for stalled receiver progress and proactively trigger resume.
+  useEffect(() => {
+    if (transferState !== 'receiving') return;
+
+    const stallCheck = setInterval(() => {
+      const receiver = receiverRef.current;
+      const last = lastProgressRef.current;
+      if (!receiver || !receiver.currentFileMeta) return;
+
+      const stalledForMs = Date.now() - (last.ts || 0);
+      const isIncomplete = receiver.receivedChunkCount < receiver.currentFileMeta.totalChunks;
+
+      if (isIncomplete && stalledForMs > 8000) {
+        console.log('[FileTransfer] Receiver stalled, triggering resume request');
+        receiver.triggerResume?.();
+        lastProgressRef.current.ts = Date.now();
+      }
+    }, 2000);
+
+    return () => clearInterval(stallCheck);
+  }, [transferState]);
 
   // ── Sender ──────────────────────────────────────────────
 

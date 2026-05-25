@@ -19,6 +19,9 @@ export function useFileTransfer() {
       if ('wakeLock' in navigator) {
         wakeLockRef.current = await navigator.wakeLock.request('screen');
         console.log('[WakeLock] Active');
+        wakeLockRef.current.addEventListener('release', () => {
+          console.log('[WakeLock] Released by browser/system');
+        });
       }
     } catch (err) {
       console.warn('[WakeLock] Failed:', err);
@@ -91,9 +94,20 @@ export function useFileTransfer() {
 
   useEffect(() => {
     let keepAliveInterval;
+    const handleVisibilityChange = async () => {
+      if (
+        document.visibilityState === 'visible' &&
+        (transferState === 'sending' || transferState === 'receiving') &&
+        !wakeLockRef.current
+      ) {
+        await requestWakeLock();
+      }
+    };
+
     if (transferState === 'sending' || transferState === 'receiving') {
       requestWakeLock();
       requestNotificationPermission();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
 
       // Keep service worker alive
       keepAliveInterval = setInterval(() => {
@@ -108,6 +122,7 @@ export function useFileTransfer() {
       }
     }
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       releaseWakeLock();
       if (keepAliveInterval) clearInterval(keepAliveInterval);
     };

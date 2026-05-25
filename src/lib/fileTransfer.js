@@ -638,6 +638,7 @@ export class FileReceiver {
 
       switch (msg.ctrl) {
         case 'file_start': {
+          console.log(`[FileReceiver] Received file_start for file ${msg.index}: ${msg.name}`);
           this.currentFileMeta = {
             index: msg.index,
             name: msg.name,
@@ -650,6 +651,7 @@ export class FileReceiver {
 
           // Initialize Disk Worker for this file
           if (this.diskWorker) {
+            console.log(`[FileReceiver] Initializing disk worker for file ${msg.index}`);
             this.diskWorkerReady = false;
             this.diskWorker.postMessage({
               type: 'INIT',
@@ -672,8 +674,11 @@ export class FileReceiver {
         }
 
         case 'file_end':
+          console.log(`[FileReceiver] Received file_end. Current file: ${this.currentFileMeta?.name}, chunks: ${this.receivedChunkCount}/${this.currentFileMeta?.totalChunks}`);
           if (this.currentFileMeta && this.receivedChunkCount === this.currentFileMeta.totalChunks) {
             this._assembleCurrentFile();
+          } else if (this.currentFileMeta) {
+            console.warn(`[FileReceiver] file_end received but chunks incomplete: ${this.receivedChunkCount}/${this.currentFileMeta.totalChunks}`);
           }
           break;
 
@@ -765,7 +770,10 @@ export class FileReceiver {
   }
 
   async _handleChunk(buffer) {
-    if (!this.currentFileMeta) return;
+    if (!this.currentFileMeta) {
+      console.warn('[FileReceiver] Received chunk but no currentFileMeta set!');
+      return;
+    }
 
     try {
       const { index, total, data } = decodeChunk(buffer);
@@ -776,6 +784,11 @@ export class FileReceiver {
       }
 
       if (this.receivedChunksSet.has(index)) return;
+
+      // Log first and last chunks
+      if (index === 0 || index === total - 1 || index % 500 === 0) {
+        console.log(`[FileReceiver] Chunk ${index}/${total} for file ${this.currentFileMeta.index}: ${this.currentFileMeta.name}`);
+      }
 
       // Clear resume timeout since we're receiving chunks
       if (this._resumeTimeout) {
@@ -943,7 +956,9 @@ export class FileReceiver {
 
     // Clean up disk worker for next file
     if (this.diskWorker) {
+      console.log('[FileReceiver] Cleaning up disk worker for next file');
       this.diskWorker.postMessage({ type: 'CLEANUP' });
+      this.diskWorkerReady = false; // Reset ready state
     }
 
     this._fallbackChunks = null;
@@ -951,6 +966,8 @@ export class FileReceiver {
     this.currentFileMeta = null;
     this.receivedChunkCount = 0;
     this.currentFileId = null;
+    
+    console.log('[FileReceiver] State cleared, ready for next file');
   }
 }
 

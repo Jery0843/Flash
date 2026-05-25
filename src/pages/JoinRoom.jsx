@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Download, Lock, Clock, Loader2, AlertCircle, Key } from 'lucide-react';
+import { ArrowLeft, Download, Lock, Clock, Loader2, AlertCircle, Key, QrCode, Camera, CameraOff } from 'lucide-react';
 import { useSignaling } from '../hooks/useSignaling';
 import { ApprovalModal } from '../components/ApprovalModal';
 import { StatusIndicator } from '../components/StatusIndicator';
@@ -23,6 +23,101 @@ export function JoinRoom() {
   const [fileMetadata, setFileMetadata] = useState(null);
   const [roomStatus, setRoomStatus] = useState(null);
   const [peerId, setPeerId] = useState(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const scanTimerRef = useRef(null);
+
+  const stopScanner = useCallback(() => {
+    if (scanTimerRef.current) {
+      clearInterval(scanTimerRef.current);
+      scanTimerRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  const extractRoomCode = useCallback((text) => {
+    if (!text) return null;
+    const direct = text.trim().toUpperCase();
+    if (validateRoomCode(direct)) return direct;
+    try {
+      const url = new URL(text);
+      const fromQuery = url.searchParams.get('code')?.toUpperCase();
+      if (fromQuery && validateRoomCode(fromQuery)) return fromQuery;
+      const fromPath = url.pathname.split('/').filter(Boolean).pop()?.toUpperCase();
+      if (fromPath && validateRoomCode(fromPath)) return fromPath;
+    } catch {
+      // not a URL
+    }
+    return null;
+  }, []);
+
+  useEffect(() => {
+    if (!scannerOpen) {
+      stopScanner();
+      return;
+    }
+
+    let cancelled = false;
+    setScannerError(null);
+
+    const startScanner = async () => {
+      if (!('BarcodeDetector' in window)) {
+        setScannerError('QR scanner is not supported on this browser.');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        scanTimerRef.current = setInterval(async () => {
+          if (!videoRef.current || videoRef.current.readyState < 2) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (!codes?.length) return;
+            const detected = extractRoomCode(codes[0].rawValue || '');
+            if (detected) {
+              setCode(detected);
+              setScannerOpen(false);
+              stopScanner();
+            }
+          } catch {
+            // keep scanning
+          }
+        }, 300);
+      } catch (err) {
+        setScannerError(err?.message || 'Could not access camera.');
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      cancelled = true;
+      stopScanner();
+    };
+  }, [scannerOpen, extractRoomCode, stopScanner]);
 
   // Listen for signaling events
   useEffect(() => {
@@ -225,6 +320,19 @@ export function JoinRoom() {
           />
         </div>
 
+        <div className="join-scan-action">
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={() => setScannerOpen(true)}
+            id="scan-qr-btn"
+            disabled={joining || roomStatus === ROOM_STATES.RECEIVER_JOINED}
+          >
+            <QrCode size={18} className="mr-2" />
+            Scan QR Code
+          </button>
+        </div>
+
         <AnimatePresence>
           {needsPassword && (
             <motion.div 
@@ -344,6 +452,43 @@ export function JoinRoom() {
             onAccept={handleAccept}
             onReject={handleReject}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {scannerOpen && (
+          <motion.div
+            className="join-scanner-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              className="join-scanner-modal"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+            >
+              <div className="join-scanner-header">
+                <h3>Scan Room QR</h3>
+                <button className="btn btn-secondary btn-sm" onClick={() => setScannerOpen(false)}>
+                  <CameraOff size={14} className="mr-1" /> Close
+                </button>
+              </div>
+
+              <div className="join-scanner-preview-wrap">
+                <video ref={videoRef} className="join-scanner-video" playsInline muted />
+                <div className="join-scanner-frame" />
+              </div>
+
+              <div className="join-scanner-tip">
+                <Camera size={16} className="mr-2" />
+                Align the sender QR inside the frame.
+              </div>
+
+              {scannerError && <div className="join-error">{scannerError}</div>}
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </motion.div>

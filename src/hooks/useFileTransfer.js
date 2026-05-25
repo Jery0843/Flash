@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import JSZip from 'jszip';
 import { FileSender, FileReceiver, createTransport, downloadBlob } from '../lib/fileTransfer';
 import { sanitizeFilename } from '../lib/sanitize';
+import { formatFileSize } from '../lib/constants';
 
 export function useFileTransfer() {
   const senderRef = useRef(null);
@@ -48,39 +49,47 @@ export function useFileTransfer() {
 
   const lastNotificationUpdateRef = useRef(0);
   const notificationVersionRef = useRef(0);
+  const lastNotificationBodyRef = useRef('');
 
   const updateNotification = useCallback((s, state) => {
     if ('Notification' in window && Notification.permission === 'granted' && s && 'serviceWorker' in navigator) {
       const now = Date.now();
       const progress = Number.isFinite(s.percentage)
-        ? Math.max(0, Math.min(100, Math.round(s.percentage)))
+        ? Math.max(0, Math.min(100, s.percentage))
         : Math.max(0, Math.min(100, Math.round((s.progress || 0) * 100)));
       const bytesTransferred = s.bytesTransferred || 0;
-      // Keep notifications very close to in-app progress.
-      // We only throttle extremely rapid bursts.
-      if (now - lastNotificationUpdateRef.current < 250 && progress > 0 && progress < 100) {
+      // Keep notifications in near lock-step with UI values.
+      if (now - lastNotificationUpdateRef.current < 80 && progress > 0 && progress < 100) {
         return;
       }
       
       lastNotificationUpdateRef.current = now;
       const notificationVersion = ++notificationVersionRef.current;
       const title = state === 'sending' ? 'Sending files...' : 'Receiving files...';
-      const transferredMb = (bytesTransferred / (1024 * 1024)).toFixed(1);
-      const totalMb = ((s.totalBytes || 0) / (1024 * 1024)).toFixed(1);
-      const body = `${progress}% • ${transferredMb}/${totalMb} MB • ${s.currentFileName || 'File'}`;
+      const body = `${progress}% • ${formatFileSize(bytesTransferred)} / ${formatFileSize(s.totalBytes || 0)} • ${s.currentFileName || 'File'}`;
 
-      navigator.serviceWorker.ready.then((registration) => {
+      // If the visible text is unchanged, skip rewriting notification.
+      if (body === lastNotificationBodyRef.current) return;
+      lastNotificationBodyRef.current = body;
+
+      navigator.serviceWorker.ready.then(async (registration) => {
           // Drop stale queued notification writes (can happen on slower devices).
           if (notificationVersion !== notificationVersionRef.current) return;
+
+          // Explicitly close prior transfer-progress notification before showing
+          // a fresh one so stale content does not linger on some platforms.
+          const existing = await registration.getNotifications({ tag: 'transfer-progress' });
+          existing.forEach((n) => n.close());
+
           registration.showNotification(title, {
             body,
             icon: '/logo192.png',
             badge: '/logo192.png',
             tag: 'transfer-progress',
             silent: true,
-            renotify: false,
+            renotify: true,
             // Add progress data for browsers that support it
-            data: { progress },
+            data: { progress, bytesTransferred, totalBytes: s.totalBytes || 0, ts: now },
           });
         });
     }

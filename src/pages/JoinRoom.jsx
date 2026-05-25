@@ -102,6 +102,7 @@ export function JoinRoom() {
                 setCode(detected);
                 setScannerOpen(false);
                 stopScanner();
+                joinRoomRef.current?.(detected);
               }
             } catch {
               // keep scanning
@@ -120,6 +121,7 @@ export function JoinRoom() {
             setCode(detected);
             setScannerOpen(false);
             stopScanner();
+            joinRoomRef.current?.(detected);
           }
         });
         zxingControlsRef.current = controls;
@@ -207,8 +209,9 @@ export function JoinRoom() {
     return () => cleanups.forEach(fn => fn?.());
   }, [signaling.client, roomStatus]);
 
-  const joinRoom = useCallback(async () => {
-    const cleanCode = code.toUpperCase().trim();
+  const joinRoom = useCallback(async (scannedCode) => {
+    const codeToUse = typeof scannedCode === 'string' ? scannedCode : code;
+    const cleanCode = codeToUse.toUpperCase().trim();
     if (!validateRoomCode(cleanCode)) {
       setError('Enter a valid 8-character room code');
       return;
@@ -227,6 +230,11 @@ export function JoinRoom() {
       setJoining(false);
     }
   }, [code, password, signaling]);
+
+  const joinRoomRef = useRef(joinRoom);
+  useEffect(() => {
+    joinRoomRef.current = joinRoom;
+  }, [joinRoom]);
 
   const handleAccept = useCallback(() => {
     const roomCode = code.toUpperCase().trim();

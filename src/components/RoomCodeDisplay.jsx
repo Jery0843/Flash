@@ -13,8 +13,8 @@ export function RoomCodeDisplay({ roomCode }) {
         width: 180,
         margin: 2,
         color: {
-          dark: '#38bdf8',
-          light: '#0a0f1c',
+          dark: '#0a0f1c',
+          light: '#ffffff',
         },
         errorCorrectionLevel: 'M',
       });

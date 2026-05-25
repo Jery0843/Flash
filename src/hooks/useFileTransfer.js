@@ -234,7 +234,15 @@ export function useFileTransfer() {
       });
     };
 
-    receiver.onComplete = ({ stats: s }) => {
+    receiver.onComplete = ({ files, stats: s }) => {
+      console.log('[useFileTransfer] Transfer complete. Files from receiver:', files?.length);
+      // Ensure all files from the receiver are in the state
+      if (files && files.length > 0) {
+        setReceivedFiles(files.map(f => ({
+          ...f,
+          name: sanitizeFilename(f.name)
+        })));
+      }
       setStats({ ...s });
       setTransferState('completed');
     };

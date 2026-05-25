@@ -678,6 +678,7 @@ export class FileReceiver {
           break;
 
         case 'all_complete': {
+          console.log('[FileReceiver] All files complete. Internal receivedFiles:', this.receivedFiles.length);
           this.onComplete?.({
             files: this.receivedFiles,
             stats: this.tracker.getStats(),

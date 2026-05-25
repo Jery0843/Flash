@@ -365,6 +365,14 @@ export function TransferRoom() {
   // Current file info for header display
   const currentFile = manifest?.files?.[fileTransfer.currentFileIndex] || manifest?.files?.[0] || null;
 
+  // Debug: Log receivedFiles changes
+  useEffect(() => {
+    console.log('[TransferRoom] receivedFiles updated:', fileTransfer.receivedFiles.length, 'files');
+    fileTransfer.receivedFiles.forEach((f, i) => {
+      console.log(`  [${i}] ${f.name} (${formatFileSize(f.size)})`);
+    });
+  }, [fileTransfer.receivedFiles]);
+
   if (!location.state) return null;
 
   return (
@@ -581,26 +589,19 @@ export function TransferRoom() {
                   transition={{ delay: 0.5, duration: 0.4 }}
                 >
                   {fileTransfer.receivedFiles.length === 1 ? (
-                    <FilePreview
-                      blob={fileTransfer.receivedFiles[0].blob}
-                      name={fileTransfer.receivedFiles[0].name}
-                      type={fileTransfer.receivedFiles[0].type}
-                    />
-                  ) : (
-                    <div className="transfer-file-meta" style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>
-                      {fileTransfer.receivedFiles.length} files ready to download
-                    </div>
-                  )}
-                  <motion.div 
-                    className="transfer-download-actions"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.6, duration: 0.3 }}
-                  >
-                    <AnimatePresence mode="wait">
-                      {fileTransfer.receivedFiles.length === 1 ? (
+                    <>
+                      <FilePreview
+                        blob={fileTransfer.receivedFiles[0].blob}
+                        name={fileTransfer.receivedFiles[0].name}
+                        type={fileTransfer.receivedFiles[0].type}
+                      />
+                      <motion.div 
+                        className="transfer-download-actions"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.6, duration: 0.3 }}
+                      >
                         <motion.button
-                          key="single"
                           className="btn btn-primary btn-lg"
                           onClick={() => fileTransfer.download(0)}
                           id="download-btn"
@@ -610,9 +611,20 @@ export function TransferRoom() {
                           <Download size={20} className="mr-2" />
                           Download File
                         </motion.button>
-                      ) : (
+                      </motion.div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="transfer-file-meta" style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>
+                        {fileTransfer.receivedFiles.length} files ready to download
+                      </div>
+                      <motion.div 
+                        className="transfer-download-actions"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.6, duration: 0.3 }}
+                      >
                         <motion.button
-                          key="all"
                           ref={downloadButtonRef}
                           className="btn btn-primary btn-lg"
                           onClick={() => setShowDownloadModal(true)}
@@ -623,12 +635,8 @@ export function TransferRoom() {
                           <Download size={20} className="mr-2" />
                           Download All ({fileTransfer.receivedFiles.length} files)
                         </motion.button>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
+                      </motion.div>
 
-                  <AnimatePresence>
-                    {fileTransfer.receivedFiles.length > 1 && (
                       <motion.div 
                         className="transfer-received-list"
                         initial={{ opacity: 0, y: 10 }}
@@ -659,8 +667,8 @@ export function TransferRoom() {
                           </motion.div>
                         ))}
                       </motion.div>
-                    )}
-                  </AnimatePresence>
+                    </>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>

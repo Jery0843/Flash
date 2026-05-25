@@ -47,10 +47,10 @@ export function useFileTransfer() {
   }, []);
 
   const lastNotificationUpdateRef = useRef(0);
-  const lastNotificationProgressRef = useRef({ percentage: -1, bytesTransferred: 0 });
+  const notificationVersionRef = useRef(0);
 
   const updateNotification = useCallback((s, state) => {
-    if ('Notification' in window && Notification.permission === 'granted' && s) {
+    if ('Notification' in window && Notification.permission === 'granted' && s && 'serviceWorker' in navigator) {
       const now = Date.now();
       const progress = Number.isFinite(s.percentage)
         ? Math.max(0, Math.min(100, Math.round(s.percentage)))
@@ -63,14 +63,15 @@ export function useFileTransfer() {
       }
       
       lastNotificationUpdateRef.current = now;
-      lastNotificationProgressRef.current = { percentage: progress, bytesTransferred };
+      const notificationVersion = ++notificationVersionRef.current;
       const title = state === 'sending' ? 'Sending files...' : 'Receiving files...';
       const transferredMb = (bytesTransferred / (1024 * 1024)).toFixed(1);
       const totalMb = ((s.totalBytes || 0) / (1024 * 1024)).toFixed(1);
       const body = `${progress}% • ${transferredMb}/${totalMb} MB • ${s.currentFileName || 'File'}`;
-      
-      if (navigator.serviceWorker.controller) {
-        navigator.serviceWorker.ready.then((registration) => {
+
+      navigator.serviceWorker.ready.then((registration) => {
+          // Drop stale queued notification writes (can happen on slower devices).
+          if (notificationVersion !== notificationVersionRef.current) return;
           registration.showNotification(title, {
             body,
             icon: '/logo192.png',
@@ -82,7 +83,6 @@ export function useFileTransfer() {
             data: { progress },
           });
         });
-      }
     }
   }, []);
 

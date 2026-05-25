@@ -28,7 +28,7 @@ export function TransferRoom() {
       // Don't save large File objects in session storage if possible
       // but for sender we need them. For now, try saving everything.
       try {
-        sessionStorage.setItem('flash_transfer_session', JSON.stringify(dataToSave));
+        sessionStorage.setItem('blitz_transfer_session', JSON.stringify(dataToSave));
       } catch (e) {
         console.warn('[TransferRoom] Failed to save session state:', e);
       }
@@ -36,7 +36,7 @@ export function TransferRoom() {
     }
 
     // Try to restore from session storage
-    const saved = sessionStorage.getItem('flash_transfer_session');
+    const saved = sessionStorage.getItem('blitz_transfer_session');
     if (saved) {
       try {
         console.log('[TransferRoom] Restoring session from storage after refresh');
@@ -92,7 +92,7 @@ export function TransferRoom() {
   // Clear session on completion/cancel
   useEffect(() => {
     if (fileTransfer.transferState === 'completed' || roomStatus === ROOM_STATES.CANCELLED) {
-      sessionStorage.removeItem('flash_transfer_session');
+      sessionStorage.removeItem('blitz_transfer_session');
     }
   }, [fileTransfer.transferState, roomStatus]);
 

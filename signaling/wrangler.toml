@@ -1,4 +1,4 @@
-name = "flash-signaling"
+name = "blitz-signaling"
 main = "src/index.js"
 compatibility_date = "2026-05-23"
 

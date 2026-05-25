@@ -1,8 +1,8 @@
-# ⚡ Flash - Secure Browser-to-Browser File Transfer
+# ⚡ Blitz - Secure Browser-to-Browser File Transfer
 
-Flash is a production-quality, WebRTC-based instant file sharing platform. Files transfer directly between browsers using encrypted peer-to-peer connections — no uploads, no server storage, no tracking.
+Blitz is a production-quality, WebRTC-based instant file sharing platform. Files transfer directly between browsers using encrypted peer-to-peer connections — no uploads, no server storage, no tracking.
 
-**Sender and receiver can be anywhere in the world.** Flash uses a 3-tier connection strategy to ensure connectivity across all network types.
+**Sender and receiver can be anywhere in the world.** Blitz uses a 3-tier connection strategy to ensure connectivity across all network types.
 
 ## 🏗️ Architecture
 
@@ -90,8 +90,8 @@ VITE_TURN_CREDENTIALS_URL=http://localhost:8787/turn-credentials
 For production, set these to your deployed Worker URL:
 
 ```env
-VITE_SIGNALING_URL=wss://flash-signaling.YOUR_SUBDOMAIN.workers.dev/ws
-VITE_TURN_CREDENTIALS_URL=https://flash-signaling.YOUR_SUBDOMAIN.workers.dev/turn-credentials
+VITE_SIGNALING_URL=wss://blitz-signaling.YOUR_SUBDOMAIN.workers.dev/ws
+VITE_TURN_CREDENTIALS_URL=https://blitz-signaling.YOUR_SUBDOMAIN.workers.dev/turn-credentials
 ```
 
 ## 📦 Deployment
@@ -110,7 +110,7 @@ VITE_TURN_CREDENTIALS_URL=https://flash-signaling.YOUR_SUBDOMAIN.workers.dev/tur
 **Option B: Direct Upload**
 ```bash
 npm run build
-npx wrangler pages deploy dist --project-name=flash
+npx wrangler pages deploy dist --project-name=blitz
 ```
 
 ### Signaling Server → Cloudflare Workers
@@ -160,12 +160,12 @@ Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
 
 Verify headers are applied:
 ```bash
-curl -I https://your-flash-site.pages.dev
+curl -I https://your-blitz-site.pages.dev
 ```
 
 ## 🔄 Connection Strategy
 
-Flash uses a 3-tier approach for global connectivity:
+Blitz uses a 3-tier approach for global connectivity:
 
 1. **Tier 1: Direct P2P** (STUN) — ~80% of connections. Zero server cost.
 2. **Tier 2: TURN Relay** — Handles symmetric NATs, corporate firewalls. Data still DTLS-encrypted.
@@ -176,7 +176,7 @@ The UI shows the connection type so users understand transfer speed expectations
 ## 📁 Project Structure
 
 ```
-flash/
+blitz/
 ├── public/
 │   ├── _headers            # Security headers
 │   └── _redirects          # SPA routing

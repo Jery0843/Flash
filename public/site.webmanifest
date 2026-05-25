@@ -1,7 +1,7 @@
 {
-  "id": "com.flash.p2p.transfer",
-  "name": "Flash File Transfer",
-  "short_name": "Flash",
+  "id": "com.blitz.p2p.transfer",
+  "name": "Blitz File Transfer",
+  "short_name": "Blitz",
   "description": "Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing.",
   "start_url": "/",
   "scope": "/",
@@ -42,14 +42,14 @@
       "sizes": "1200x630",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "Flash Desktop App"
+      "label": "Blitz Desktop App"
     },
     {
       "src": "/og-image.png",
       "sizes": "1200x630",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Flash Mobile App"
+      "label": "Blitz Mobile App"
     }
   ],
   "share_target": {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flash-v1';
+const CACHE_NAME = 'blitz-v1';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

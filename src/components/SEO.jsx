@@ -1,12 +1,12 @@
 import { Helmet } from 'react-helmet-async';
 
 export function SEO({ title, description, url, breadcrumbs, type = 'website', image = '/og-image.png', faqData = null, howToData = null, exactTitle = false }) {
-  const siteName = 'Flash File Transfer';
+  const siteName = 'Blitz File Transfer';
   const fullTitle = exactTitle ? title : (title ? `${title} | ${siteName}` : siteName);
   const defaultDesc = 'Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing. Transfer files directly between devices with end-to-end encryption. Send large files up to 25GB for free without size limits.';
   const metaDesc = description || defaultDesc;
-  const canonicalUrl = url ? `https://flash-4n9.pages.dev${url}` : 'https://flash-4n9.pages.dev';
-  const imageUrl = `https://flash-4n9.pages.dev${image}`;
+  const canonicalUrl = url ? `https://blitz-4n9.pages.dev${url}` : 'https://blitz-4n9.pages.dev';
+  const imageUrl = `https://blitz-4n9.pages.dev${image}`;
   
   // Expanded keywords for SEO
   const keywords = 'online file transfer, file transfer, P2P sharing, secure file sharing, browser to browser, peer to peer, instant transfer, no upload, direct transfer, encrypted file transfer, large file transfer, send files free, share files online, file sharing service, P2P file transfer, WebRTC file transfer, end-to-end encryption, unlimited file size, fast file transfer, cross-platform file sharing, mobile file transfer, desktop file sharing';
@@ -19,7 +19,7 @@ export function SEO({ title, description, url, breadcrumbs, type = 'website', im
       '@type': 'ListItem',
       position: index + 1,
       name: crumb.name,
-      item: `https://flash-4n9.pages.dev${crumb.path}`
+      item: `https://blitz-4n9.pages.dev${crumb.path}`
     }))
   } : null;
 
@@ -33,15 +33,15 @@ export function SEO({ title, description, url, breadcrumbs, type = 'website', im
     publisher: {
       '@type': 'Organization',
       name: siteName,
-      url: 'https://flash-4n9.pages.dev',
+      url: 'https://blitz-4n9.pages.dev',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://flash-4n9.pages.dev/logo.png'
+        url: 'https://blitz-4n9.pages.dev/logo.png'
       }
     },
     potentialAction: {
       '@type': 'SearchAction',
-      target: 'https://flash-4n9.pages.dev/search?q={search_term_string}',
+      target: 'https://blitz-4n9.pages.dev/search?q={search_term_string}',
       'query-input': 'required name=search_term_string'
     }
   };
@@ -103,8 +103,8 @@ export function SEO({ title, description, url, breadcrumbs, type = 'website', im
       
       {/* Twitter Card Tags */}
       <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:site" content="@FlashTransfer" />
-      <meta name="twitter:creator" content="@FlashTransfer" />
+      <meta name="twitter:site" content="@BlitzTransfer" />
+      <meta name="twitter:creator" content="@BlitzTransfer" />
       <meta name="twitter:title" content={fullTitle} />
       <meta name="twitter:description" content={metaDesc} />
       <meta name="twitter:image" content={imageUrl} />

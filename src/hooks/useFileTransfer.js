@@ -298,7 +298,7 @@ export function useFileTransfer() {
       
       // Download the zip
       const timestamp = new Date().toISOString().slice(0, 10);
-      downloadBlob(content, `flash-files-${timestamp}.zip`);
+      downloadBlob(content, `blitz-files-${timestamp}.zip`);
     } catch (err) {
       console.error('[FileTransfer] ZIP creation failed:', err);
       throw err;

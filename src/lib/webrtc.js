@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Flash - WebRTC Manager
+   Blitz - WebRTC Manager
    RTCPeerConnection + RTCDataChannel management with
    3-tier connection strategy (P2P → TURN → WS fallback)
    ═══════════════════════════════════════════════════════════ */

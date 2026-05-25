@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Flash Signaling Server — Message Validation
+// Blitz Signaling Server — Message Validation
 // ═══════════════════════════════════════════════════════════
 
 import { MSG, MAX_SIGNALING_PAYLOAD } from './constants.js';

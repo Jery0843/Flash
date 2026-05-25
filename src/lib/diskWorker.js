@@ -1,5 +1,5 @@
 /**
- * Flash - Disk Worker (OPFS)
+ * Blitz - Disk Worker (OPFS)
  * Handles high-speed, zero-RAM disk I/O using the Origin Private File System.
  * This runs in a separate thread to keep the UI responsive during 3GB+ transfers.
  */
@@ -20,7 +20,7 @@ self.onmessage = async (e) => {
         const root = await navigator.storage.getDirectory();
         
         // Create a unique temporary file
-        const tempName = `flash_temp_${Date.now()}_${fileName}`;
+        const tempName = `blitz_temp_${Date.now()}_${fileName}`;
         fileHandle = await root.getFileHandle(tempName, { create: true });
         
         // Get access handle (requires worker context for sync access)

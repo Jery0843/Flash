@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Flash Signaling Server — Constants
+// Blitz Signaling Server — Constants
 // ═══════════════════════════════════════════════════════════
 
 export const ROOM_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes

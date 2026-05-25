@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Flash Signaling Server — Worker Entry Point
+// Blitz Signaling Server — Worker Entry Point
 //
 // Routes:
 //   /ws?action=create&code=XXX     → Create room

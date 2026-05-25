@@ -78,7 +78,7 @@ npx wrangler deploy
 
 After configuration, test the connection:
 
-1. Open browser console on https://flash.cloudpcs017.workers.dev
+1. Open browser console on https://blitz.cloudpcs017.workers.dev
 2. Check the ICE servers being used:
    ```javascript
    // Should show TURN servers in addition to STUN

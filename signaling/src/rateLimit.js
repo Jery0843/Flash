@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Flash Signaling Server — Rate Limiting
+// Blitz Signaling Server — Rate Limiting
 // ═══════════════════════════════════════════════════════════
 
 import { RATE_LIMIT_WINDOW_MS, MAX_ROOMS_PER_IP } from './constants.js';

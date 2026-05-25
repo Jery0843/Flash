@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Flash Signaling Server — Durable Object: SignalingRoom
+// Blitz Signaling Server — Durable Object: SignalingRoom
 //
 // Each room is a separate Durable Object instance.
 // Uses WebSocket Hibernation API for efficient connection management.

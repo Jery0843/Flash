@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Flash — Signaling Client
+   Blitz — Signaling Client
    WebSocket client for the signaling server (Durable Object)
    ═══════════════════════════════════════════════════════════ */
 

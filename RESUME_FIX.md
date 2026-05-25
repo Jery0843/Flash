@@ -250,7 +250,7 @@ channel.onopen = () => {
    - Look for: `[FileSender] Resume request for file X from chunk Y`
 
 3. **Verify IndexedDB**
-   - Open DevTools → Application → IndexedDB → flash-transfers
+   - Open DevTools → Application → IndexedDB → blitz-transfers
    - Check that chunks are being saved during transfer
    - After reconnection, verify chunks are loaded and transfer continues
 

@@ -7,7 +7,7 @@ export function Layout() {
       <header className="layout-header">
         <div className="layout-header-inner">
           <Link to="/" className="layout-logo" id="nav-home">
-            <span className="layout-logo-text">FLASH</span>
+            <span className="layout-logo-text">BLITZ</span>
           </Link>
         </div>
       </header>

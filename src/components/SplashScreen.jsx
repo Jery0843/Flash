@@ -67,7 +67,7 @@ export function SplashScreen({ onComplete }) {
           <LightningBranch d={leftPath} colorClass="glow-purple" delay={0.5} duration={1.2} maxStroke={8} />
           <LightningBranch d={leftBranch1} colorClass="glow-purple" delay={0.7} duration={0.8} maxStroke={3} />
           
-          {/* Flash core at intersection */}
+          {/* Blitz core at intersection */}
           <motion.circle
             cx="500" cy="550" r="10" fill="#fff" className="glow-blue"
             initial={{ scale: 0, opacity: 0 }}

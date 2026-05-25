@@ -26,9 +26,9 @@ const staggerItem = {
 };
 
 export function Home({
-  seoTitle = "Flash - Free P2P File Transfer & Secure Sharing",
-  seoDescription = "Flash File Transfer: Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing. Send large files up to 25GB for free with end-to-end encryption.",
-  heroTitle = "FLASH",
+  seoTitle = "Blitz - Free P2P File Transfer & Secure Sharing",
+  seoDescription = "Blitz File Transfer: Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing. Send large files up to 25GB for free with end-to-end encryption.",
+  heroTitle = "BLITZ",
   heroSubtitle = "Send files instantly from your browser to theirs. No servers, no storage limits, totally secure.",
   exactTitle = true,
   url = "/"
@@ -42,7 +42,7 @@ export function Home({
   // FAQ data for rich snippets
   const faqData = [
     {
-      question: "Is Flash completely free?",
+      question: "Is Blitz completely free?",
       answer: "Yes. There are no hidden fees, subscriptions, or file size limits. Send up to 25GB entirely for free."
     },
     {
@@ -55,11 +55,11 @@ export function Home({
     },
     {
       question: "Do I need to create an account?",
-      answer: "Not at all. Flash works entirely in your browser. No registration, login, or personal information is required."
+      answer: "Not at all. Blitz works entirely in your browser. No registration, login, or personal information is required."
     },
     {
       question: "Does it work across different devices?",
-      answer: "Yes, Flash is fully cross-platform. You can seamlessly transfer files between Windows, Mac, Linux, iOS, and Android."
+      answer: "Yes, Blitz is fully cross-platform. You can seamlessly transfer files between Windows, Mac, Linux, iOS, and Android."
     },
     {
       question: "How fast are the transfers?",
@@ -69,12 +69,12 @@ export function Home({
 
   // How-to data for rich snippets
   const howToData = {
-    name: "How to Send Files with Flash",
-    description: "Learn how to securely transfer files between devices using Flash's browser-to-browser P2P technology.",
+    name: "How to Send Files with Blitz",
+    description: "Learn how to securely transfer files between devices using Blitz's browser-to-browser P2P technology.",
     steps: [
       { name: "Click Send", text: "On the home page, click the 'Send' button to create a new transfer room." },
       { name: "Select Files", text: "Choose the files you want to send. You can select multiple files of any type." },
-      { name: "Share Room Code", text: "Flash generates a unique 8-character room code. Share this code with the recipient." },
+      { name: "Share Room Code", text: "Blitz generates a unique 8-character room code. Share this code with the recipient." },
       { name: "Recipient Joins", text: "The recipient enters the room code on the 'Receive' page to connect." },
       { name: "Transfer Begins", text: "Once connected, files transfer directly between devices with end-to-end encryption." }
     ]
@@ -90,12 +90,12 @@ export function Home({
   ];
 
   const comparisons = [
-    { feature: "End-to-End Encryption", flash: true, wetransfer: true, gdrive: true, email: false },
-    { feature: "No Server Storage", flash: true, wetransfer: false, gdrive: false, email: false },
-    { feature: "25GB+ File Support", flash: true, wetransfer: false, gdrive: true, email: false },
-    { feature: "No Account Required", flash: true, wetransfer: true, gdrive: false, email: false },
-    { feature: "Completely Free", flash: true, wetransfer: false, gdrive: false, email: true },
-    { feature: "Direct P2P Transfer", flash: true, wetransfer: false, gdrive: false, email: false },
+    { feature: "End-to-End Encryption", blitz: true, wetransfer: true, gdrive: true, email: false },
+    { feature: "No Server Storage", blitz: true, wetransfer: false, gdrive: false, email: false },
+    { feature: "25GB+ File Support", blitz: true, wetransfer: false, gdrive: true, email: false },
+    { feature: "No Account Required", blitz: true, wetransfer: true, gdrive: false, email: false },
+    { feature: "Completely Free", blitz: true, wetransfer: false, gdrive: false, email: true },
+    { feature: "Direct P2P Transfer", blitz: true, wetransfer: false, gdrive: false, email: false },
   ];
 
   return (
@@ -146,7 +146,7 @@ export function Home({
         viewport={{ once: true, margin: "-100px" }}
         variants={staggerContainer}
       >
-        <motion.h2 className="section-title" variants={staggerItem}>Why Choose Flash?</motion.h2>
+        <motion.h2 className="section-title" variants={staggerItem}>Why Choose Blitz?</motion.h2>
         <motion.div className="features-grid" variants={staggerContainer}>
           {features.map((feature, i) => (
             <motion.article key={i} className="feature-card" variants={staggerItem}>
@@ -168,13 +168,13 @@ export function Home({
         viewport={{ once: true, margin: "-100px" }}
         variants={fadeIn}
       >
-        <h2 className="section-title">How Flash Compares</h2>
+        <h2 className="section-title">How Blitz Compares</h2>
         <div className="comparison-table-wrapper">
           <table className="comparison-table">
             <thead>
               <tr>
                 <th>Feature</th>
-                <th>Flash</th>
+                <th>Blitz</th>
                 <th>WeTransfer</th>
                 <th>Google Drive</th>
                 <th>Email</th>
@@ -275,7 +275,7 @@ export function Home({
       </motion.section>
 
       <footer className="home-copyright">
-        © {new Date().getFullYear()} Flash File Transfer. All rights reserved.
+        © {new Date().getFullYear()} Blitz File Transfer. All rights reserved.
       </footer>
     </main>
   );

@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   Flash - IndexedDB Transfer Storage
+   Blitz - IndexedDB Transfer Storage
    Persists received chunks to IndexedDB so transfers can resume
    after connection drops, page reloads, or tab closures.
 
@@ -9,7 +9,7 @@
                             receivedChunks, updatedAt }
    ═══════════════════════════════════════════════════════════ */
 
-const DB_NAME = 'flash-transfers';
+const DB_NAME = 'blitz-transfers';
 const DB_VERSION = 1;
 const CHUNKS_STORE = 'chunks';
 const TRANSFERS_STORE = 'transfers';

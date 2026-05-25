@@ -231,6 +231,7 @@ export class SignalingRoom {
       case MSG.ICE_CANDIDATE:
       case MSG.TRANSFER_CANCEL:
       case MSG.WS_RELAY_MODE:
+      case MSG.FILE_RESUME_REQUEST:
         if (isSender && SENDER_TO_RECEIVER.has(type)) {
           this._routeToReceiver(payload?.targetPeerId, message);
         } else if (isReceiver && RECEIVER_TO_SENDER.has(type)) {

@@ -39,7 +39,21 @@ export function JoinRoom() {
         if (data.files && Array.isArray(data.files)) {
           const validation = validateFileManifest(data);
           if (validation.valid) {
-            setFileMetadata(data);
+            const normalizedFiles = data.files.map((f) => ({
+              ...f,
+              totalChunks: f.totalChunks || Math.ceil(f.size / (256 * 1024)),
+            }));
+            const normalizedTotalSize =
+              typeof data.totalSize === 'number' && data.totalSize > 0
+                ? data.totalSize
+                : normalizedFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+
+            setFileMetadata({
+              ...data,
+              files: normalizedFiles,
+              totalFiles: data.totalFiles || normalizedFiles.length,
+              totalSize: normalizedTotalSize,
+            });
           } else {
             setError(`Invalid files: ${validation.error}`);
           }

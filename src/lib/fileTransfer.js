@@ -487,8 +487,10 @@ export class FileReceiver {
    */
   constructor(manifest, signaling = null, roomCode = null, peerId = null) {
     this.manifest = manifest;
-    this.totalSize = manifest.totalSize;
-    this.totalFiles = manifest.totalFiles;
+    const safeFiles = Array.isArray(manifest?.files) ? manifest.files : [];
+    const derivedTotalSize = safeFiles.reduce((sum, f) => sum + (Number(f?.size) || 0), 0);
+    this.totalSize = Number(manifest?.totalSize) > 0 ? Number(manifest.totalSize) : derivedTotalSize;
+    this.totalFiles = Number(manifest?.totalFiles) > 0 ? Number(manifest.totalFiles) : safeFiles.length;
     this.receivedFiles = [];
     this.tracker = new ProgressTracker(this.totalSize);
 

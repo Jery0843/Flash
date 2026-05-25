@@ -521,6 +521,10 @@ export class FileReceiver {
     this.onComplete = null;
     this.onError = null;
 
+    // Message Queue for sequential processing
+    this._messageQueue = [];
+    this._processingQueue = false;
+
     // Initialize DB support
     this._initDB();
     this._initDiskWorker();
@@ -573,6 +577,16 @@ export class FileReceiver {
     }
   }
 
+  // Buffer chunks when worker isn't ready
+  _bufferChunkForWorker(index, data) {
+    // Limit queue size to prevent memory buildup (max 100 chunks = ~6.4MB)
+    if (this._pendingWorkerChunks.length < 100) {
+      this._pendingWorkerChunks.push({ index, data });
+      return true;
+    }
+    return false;
+  }
+
   async _initDB() {
     this.dbEnabled = await isDBAvailable();
     
@@ -605,17 +619,31 @@ export class FileReceiver {
     }
   }
 
-  /**
-   * Handle incoming DataChannel message.
-   * Can be a string (JSON control) or ArrayBuffer (binary chunk).
-   */
   handleMessage(data) {
     if (this.cancelled) return;
+    this._messageQueue.push(data);
+    this._processQueue();
+  }
 
-    if (typeof data === 'string') {
-      this._handleControl(data);
-    } else if (data instanceof ArrayBuffer) {
-      this._handleChunk(data);
+  async _processQueue() {
+    if (this._processingQueue) return;
+    this._processingQueue = true;
+
+    try {
+      while (this._messageQueue.length > 0) {
+        if (this.cancelled) {
+          this._messageQueue = [];
+          break;
+        }
+        const data = this._messageQueue.shift();
+        if (typeof data === 'string') {
+          await this._handleControl(data);
+        } else if (data instanceof ArrayBuffer) {
+          await this._handleChunk(data);
+        }
+      }
+    } finally {
+      this._processingQueue = false;
     }
   }
 
@@ -632,13 +660,23 @@ export class FileReceiver {
     }
   }
 
-  _handleControl(raw) {
+  async _handleControl(raw) {
+    // Ignore ping/pong messages
+    if (raw === 'ping' || raw === 'pong') return;
+    
     try {
       const msg = JSON.parse(raw);
 
       switch (msg.ctrl) {
         case 'file_start': {
           console.log(`[FileReceiver] Received file_start for file ${msg.index}: ${msg.name}`);
+          
+          // Clear any pending state from previous file
+          this._fallbackChunks = null;
+          this.receivedChunksSet.clear();
+          this.receivedChunkCount = 0;
+          this.currentFileId = null;
+          
           this.currentFileMeta = {
             index: msg.index,
             name: msg.name,
@@ -646,8 +684,6 @@ export class FileReceiver {
             type: msg.type,
             totalChunks: msg.totalChunks,
           };
-          this.receivedChunkCount = 0;
-          this.receivedChunksSet.clear();
 
           // Initialize Disk Worker for this file
           if (this.diskWorker) {
@@ -662,7 +698,7 @@ export class FileReceiver {
           // Check IndexedDB for existing chunks to resume
           if (this.roomCode && this.dbEnabled) {
             this.currentFileId = makeFileId(this.roomCode, msg.name, msg.size);
-            this._tryResume();
+            await this._tryResume();
           }
           break;
         }
@@ -676,7 +712,7 @@ export class FileReceiver {
         case 'file_end':
           console.log(`[FileReceiver] Received file_end. Current file: ${this.currentFileMeta?.name}, chunks: ${this.receivedChunkCount}/${this.currentFileMeta?.totalChunks}`);
           if (this.currentFileMeta && this.receivedChunkCount === this.currentFileMeta.totalChunks) {
-            this._assembleCurrentFile();
+            await this._assembleCurrentFile();
           } else if (this.currentFileMeta) {
             console.warn(`[FileReceiver] file_end received but chunks incomplete: ${this.receivedChunkCount}/${this.currentFileMeta.totalChunks}`);
           }
@@ -772,6 +808,8 @@ export class FileReceiver {
   async _handleChunk(buffer) {
     if (!this.currentFileMeta) {
       console.warn('[FileReceiver] Received chunk but no currentFileMeta set!');
+      // Still process the chunk but don't track it - it might be for the next file
+      // The sender will re-send it when we request resume
       return;
     }
 
@@ -818,19 +856,20 @@ export class FileReceiver {
           // Transfer ownership of the ArrayBuffer to the worker (zero-copy)
           this.diskWorker.postMessage({ type: 'WRITE_CHUNK', payload: { index, data } }, [data]);
         } else {
-          // Worker not ready yet (first few chunks), queue them
-          // Limit queue size to prevent memory buildup (max 50 chunks = ~3.2MB)
-          if (this._pendingWorkerChunks.length < 50) {
-            this._pendingWorkerChunks.push({ index, data });
-          } else {
-            // Worker is taking too long to initialize, fall back to IndexedDB temporarily
-            console.warn('[FileReceiver] Worker initialization slow, using IndexedDB fallback for chunk', index);
+          // Worker not ready yet, try to buffer the chunk
+          const buffered = this._bufferChunkForWorker(index, data);
+          if (!buffered) {
+            // Buffer is full, fall back to IndexedDB
+            console.warn('[FileReceiver] Worker buffer full, using IndexedDB fallback for chunk', index);
             if (this.currentFileId && this.dbEnabled) {
               await saveChunk(this.currentFileId, index, data);
             }
           }
         }
-      } else if (!this.currentFileId || !this.dbEnabled) {
+      } else if (this.currentFileId && this.dbEnabled) {
+        // Save to IndexedDB if OPFS is not available
+        await saveChunk(this.currentFileId, index, data);
+      } else {
         // Fallback to RAM ONLY if both OPFS and IndexedDB are unavailable
         // NOTE: For 3GB files, this WILL crash if IndexedDB is also disabled.
         if (!this._fallbackChunks) this._fallbackChunks = [];
@@ -873,7 +912,12 @@ export class FileReceiver {
         await new Promise(resolve => setTimeout(resolve, 0));
       }
 
-      if (this.receivedChunkCount === this.currentFileMeta.totalChunks) {
+      // The file_end control message is guaranteed to follow the last chunk
+      // in the WebRTC DataChannel (which is ordered).
+      // We rely on 'file_end' to call _assembleCurrentFile() if it arrives last,
+      // or we can call it here if we hit the chunk count.
+      // Since _assembleCurrentFile sets currentFileMeta to null, it's safe if both try to call it.
+      if (this.currentFileMeta && this.receivedChunkCount === this.currentFileMeta.totalChunks) {
         await this._assembleCurrentFile();
       }
     } catch (err) {
@@ -961,11 +1005,12 @@ export class FileReceiver {
       this.diskWorkerReady = false; // Reset ready state
     }
 
+    // With the sequential message queue, we can safely clear state here
     this._fallbackChunks = null;
     this.receivedChunksSet.clear();
-    this.currentFileMeta = null;
     this.receivedChunkCount = 0;
     this.currentFileId = null;
+    this.currentFileMeta = null;
     
     console.log('[FileReceiver] State cleared, ready for next file');
   }

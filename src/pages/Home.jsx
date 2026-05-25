@@ -25,7 +25,14 @@ const staggerItem = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
 };
 
-export function Home() {
+export function Home({
+  seoTitle = "Flash - Free P2P File Transfer & Secure Sharing",
+  seoDescription = "Flash File Transfer: Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing. Send large files up to 25GB for free with end-to-end encryption.",
+  heroTitle = "FLASH",
+  heroSubtitle = "Send files instantly from your browser to theirs. No servers, no storage limits, totally secure.",
+  exactTitle = true,
+  url = "/"
+}) {
   const [openFaqIndex, setOpenFaqIndex] = useState(null);
 
   const toggleFaq = (index) => {
@@ -94,11 +101,12 @@ export function Home() {
   return (
     <main className="home-page">
       <SEO 
-        title="Free Secure File Transfer - Send Large Files Instantly"
-        description="Flash File Transfer: Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing. Send large files up to 25GB for free with end-to-end encryption."
-        url="/"
+        title={seoTitle}
+        description={seoDescription}
+        url={url}
         faqData={faqData}
         howToData={howToData}
+        exactTitle={exactTitle}
       />
       
       <div className="home-bg" aria-hidden="true">
@@ -113,11 +121,11 @@ export function Home() {
         animate="visible"
         variants={staggerContainer}
       >
-        <motion.h1 className="home-title" data-text="FLASH" variants={staggerItem}>
-          FLASH
+        <motion.h1 className="home-title" data-text={heroTitle} variants={staggerItem}>
+          {heroTitle}
         </motion.h1>
         <motion.p className="home-subtitle" variants={staggerItem}>
-          Send files instantly from your browser to theirs. No servers, no storage limits, totally secure.
+          {heroSubtitle}
         </motion.p>
 
         <motion.div className="home-actions" variants={staggerItem}>

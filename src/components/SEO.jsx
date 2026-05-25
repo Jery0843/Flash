@@ -1,8 +1,8 @@
 import { Helmet } from 'react-helmet-async';
 
-export function SEO({ title, description, url, breadcrumbs, type = 'website', image = '/og-image.png', faqData = null, howToData = null }) {
+export function SEO({ title, description, url, breadcrumbs, type = 'website', image = '/og-image.png', faqData = null, howToData = null, exactTitle = false }) {
   const siteName = 'Flash File Transfer';
-  const fullTitle = title ? `${title} | ${siteName}` : siteName;
+  const fullTitle = exactTitle ? title : (title ? `${title} | ${siteName}` : siteName);
   const defaultDesc = 'Secure, instant browser-to-browser file transfer. No uploads, no storage, just fast P2P sharing. Transfer files directly between devices with end-to-end encryption. Send large files up to 25GB for free without size limits.';
   const metaDesc = description || defaultDesc;
   const canonicalUrl = url ? `https://flash-4n9.pages.dev${url}` : 'https://flash-4n9.pages.dev';

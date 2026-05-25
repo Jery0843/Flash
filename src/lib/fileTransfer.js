@@ -930,6 +930,7 @@ export class FileReceiver {
     };
 
     this.receivedFiles.push(fileResult);
+    console.log(`[FileReceiver] File ${this.currentFileMeta.index + 1} assembled: ${this.currentFileMeta.name}, total files: ${this.receivedFiles.length}`);
     this.onFileComplete?.(this.currentFileMeta.index, fileResult);
 
     // Clean up IndexedDB for completed file

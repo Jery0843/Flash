@@ -580,11 +580,17 @@ export function TransferRoom() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.5, duration: 0.4 }}
                 >
-                  <FilePreview
-                    blob={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].blob}
-                    name={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].name}
-                    type={fileTransfer.receivedFiles[fileTransfer.receivedFiles.length - 1].type}
-                  />
+                  {fileTransfer.receivedFiles.length === 1 ? (
+                    <FilePreview
+                      blob={fileTransfer.receivedFiles[0].blob}
+                      name={fileTransfer.receivedFiles[0].name}
+                      type={fileTransfer.receivedFiles[0].type}
+                    />
+                  ) : (
+                    <div className="transfer-file-meta" style={{ textAlign: 'center', marginBottom: 'var(--space-4)' }}>
+                      {fileTransfer.receivedFiles.length} files ready to download
+                    </div>
+                  )}
                   <motion.div 
                     className="transfer-download-actions"
                     initial={{ opacity: 0, y: 10 }}

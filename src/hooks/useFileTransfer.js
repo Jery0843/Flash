@@ -226,10 +226,12 @@ export function useFileTransfer() {
 
     receiver.onFileComplete = (index, fileResult) => {
       const safeName = sanitizeFilename(fileResult.name);
-      setReceivedFiles((prev) => [
-        ...prev,
-        { ...fileResult, name: safeName },
-      ]);
+      console.log(`[useFileTransfer] File ${index} complete: ${safeName}`);
+      setReceivedFiles((prev) => {
+        const updated = [...prev, { ...fileResult, name: safeName }];
+        console.log(`[useFileTransfer] Total received files: ${updated.length}`);
+        return updated;
+      });
     };
 
     receiver.onComplete = ({ stats: s }) => {

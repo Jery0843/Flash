@@ -54,6 +54,15 @@ export default function App() {
                 url="/p2p-file-sharing"
               />
             } />
+            <Route path="online-file-transfer" element={
+              <Home 
+                seoTitle="Online File Transfer | Fast & Secure Browser Sharing | Flash"
+                seoDescription="The fastest online file transfer tool. Share files directly from your browser without uploading to any server. Free, unlimited, and encrypted."
+                heroTitle="ONLINE TRANSFER"
+                heroSubtitle="The fastest online file transfer. No uploads, no waiting—just instant sharing straight from your browser."
+                url="/online-file-transfer"
+              />
+            } />
             <Route path="browser-file-transfer" element={
               <Home 
                 seoTitle="Browser File Transfer | No Install Direct File Sharing | Flash"

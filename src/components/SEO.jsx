@@ -9,7 +9,7 @@ export function SEO({ title, description, url, breadcrumbs, type = 'website', im
   const imageUrl = `https://flash-4n9.pages.dev${image}`;
   
   // Expanded keywords for SEO
-  const keywords = 'file transfer, P2P sharing, secure file sharing, browser to browser, peer to peer, instant transfer, no upload, direct transfer, encrypted file transfer, large file transfer, send files free, share files online, file sharing service, P2P file transfer, WebRTC file transfer, secure file sharing, end-to-end encryption, unlimited file size, fast file transfer, cross-platform file sharing, mobile file transfer, desktop file sharing';
+  const keywords = 'online file transfer, file transfer, P2P sharing, secure file sharing, browser to browser, peer to peer, instant transfer, no upload, direct transfer, encrypted file transfer, large file transfer, send files free, share files online, file sharing service, P2P file transfer, WebRTC file transfer, end-to-end encryption, unlimited file size, fast file transfer, cross-platform file sharing, mobile file transfer, desktop file sharing';
 
   // JSON-LD structured data for Breadcrumbs if provided
   const breadcrumbSchema = breadcrumbs ? {

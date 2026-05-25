@@ -244,7 +244,8 @@ export function useFileTransfer() {
 
     setTransferState('receiving');
 
-    // Wire up data channel messages to receiver
+    // Wire up data channel messages to receiver (clear any existing handler first)
+    dataChannel.onmessage = null;
     dataChannel.onmessage = (event) => {
       receiver.handleMessage(event.data);
     };

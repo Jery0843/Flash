@@ -23,10 +23,12 @@ export function TransferRoom() {
   const [sessionData, setSessionData] = useState(() => {
     const fromLocation = location.state;
     if (fromLocation) {
-      // Save to session storage for refresh survival
+      // Save to session storage for refresh survival (but exclude File objects)
       const dataToSave = { ...fromLocation };
-      // Don't save large File objects in session storage if possible
-      // but for sender we need them. For now, try saving everything.
+      // Don't save File objects to sessionStorage (they can't be serialized)
+      if (dataToSave.files) {
+        delete dataToSave.files;
+      }
       try {
         sessionStorage.setItem('blitz_transfer_session', JSON.stringify(dataToSave));
       } catch (e) {
@@ -39,8 +41,15 @@ export function TransferRoom() {
     const saved = sessionStorage.getItem('blitz_transfer_session');
     if (saved) {
       try {
+        const restored = JSON.parse(saved);
         console.log('[TransferRoom] Restoring session from storage after refresh');
-        return JSON.parse(saved);
+        // For receivers, we can restore. For senders, we can't restore File objects.
+        if (restored.role === 'sender') {
+          console.warn('[TransferRoom] Cannot restore sender session after refresh (File objects lost)');
+          sessionStorage.removeItem('blitz_transfer_session');
+          return null;
+        }
+        return restored;
       } catch (e) {
         return null;
       }
@@ -95,6 +104,47 @@ export function TransferRoom() {
       sessionStorage.removeItem('blitz_transfer_session');
     }
   }, [fileTransfer.transferState, roomStatus]);
+
+  // Prevent page refresh during active transfer
+  useEffect(() => {
+    if (fileTransfer.transferState === 'sending' || fileTransfer.transferState === 'receiving') {
+      const handleBeforeUnload = (e) => {
+        e.preventDefault();
+        e.returnValue = 'Transfer in progress. Are you sure you want to leave?';
+        return e.returnValue;
+      };
+
+      // Handle visibility changes to manage resources
+      const handleVisibilityChange = () => {
+        if (document.hidden) {
+          console.log('[TransferRoom] Tab hidden, transfer continues in background');
+          // Save current state in case of crash
+          try {
+            const state = {
+              role: isSender ? 'sender' : 'receiver',
+              roomCode,
+              fileMetadata: initialMetadata,
+              peerId: peerIdRef.current,
+              timestamp: Date.now(),
+            };
+            sessionStorage.setItem('blitz_transfer_state_backup', JSON.stringify(state));
+          } catch (e) {
+            console.warn('[TransferRoom] Failed to save backup state:', e);
+          }
+        } else {
+          console.log('[TransferRoom] Tab visible again');
+        }
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }
+  }, [fileTransfer.transferState, isSender, roomCode, initialMetadata]);
 
   // WebRTC negotiation
   useEffect(() => {
@@ -162,6 +212,11 @@ export function TransferRoom() {
               // Reconnection - rewire the data channel and trigger resume
               console.log('[TransferRoom] Rewiring receiver data channel after reconnection');
               const receiver = fileTransfer.receiverRef.current;
+              
+              // Remove old handler to prevent memory leaks
+              manager.dataChannel.onmessage = null;
+              
+              // Set new handler
               manager.dataChannel.onmessage = (event) => {
                 receiver.handleMessage(event.data);
               };

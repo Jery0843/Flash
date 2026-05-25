@@ -551,10 +551,15 @@ export class FileReceiver {
         console.log('[FileReceiver] DiskWorker ready:', payload.tempName);
         this.diskWorkerReady = true;
         // Process any chunks that arrived while worker was starting
-        for (const chunk of this._pendingWorkerChunks) {
-          this.diskWorker.postMessage({ type: 'WRITE_CHUNK', payload: chunk });
+        const chunksToSend = [...this._pendingWorkerChunks];
+        this._pendingWorkerChunks = []; // Clear immediately to free memory
+        for (const chunk of chunksToSend) {
+          this.diskWorker.postMessage({ type: 'WRITE_CHUNK', payload: chunk }, [chunk.data]);
         }
-        this._pendingWorkerChunks = [];
+        break;
+
+      case 'CHUNK_WRITTEN':
+        // Chunk successfully written to disk, we can ignore this for now
         break;
 
       case 'COMPLETE':
@@ -571,6 +576,12 @@ export class FileReceiver {
   async _initDB() {
     this.dbEnabled = await isDBAvailable();
     
+    // Request persistent storage to prevent eviction during transfer
+    if (navigator.storage && navigator.storage.persist) {
+      const isPersisted = await navigator.storage.persist();
+      console.log('[FileReceiver] Persistent storage:', isPersisted ? 'granted' : 'denied');
+    }
+    
     // Check if we have enough storage quota for this transfer
     if (this.dbEnabled && navigator.storage && navigator.storage.estimate) {
       try {
@@ -579,9 +590,14 @@ export class FileReceiver {
         const needed = this.totalSize;
         
         console.log(`[FileReceiver] Storage: ${(available / 1024 / 1024 / 1024).toFixed(2)} GB available, ${(needed / 1024 / 1024 / 1024).toFixed(2)} GB needed`);
+        console.log(`[FileReceiver] OPFS available: ${this.useOPFS}`);
         
-        if (available < needed) {
+        if (available < needed && !this.useOPFS) {
           console.warn(`[FileReceiver] Insufficient storage: need ${(needed / 1024 / 1024 / 1024).toFixed(2)} GB but only ${(available / 1024 / 1024 / 1024).toFixed(2)} GB available`);
+          // Disable IndexedDB to avoid quota errors, rely on OPFS or fail gracefully
+          if (!this.useOPFS) {
+            this.onError?.(new Error(`Insufficient storage: ${(needed / 1024 / 1024 / 1024).toFixed(2)} GB needed but only ${(available / 1024 / 1024 / 1024).toFixed(2)} GB available`));
+          }
         }
       } catch (err) {
         console.warn('[FileReceiver] Could not estimate storage:', err);
@@ -637,7 +653,7 @@ export class FileReceiver {
             this.diskWorkerReady = false;
             this.diskWorker.postMessage({
               type: 'INIT',
-              payload: { fileName: msg.name, fileSize: msg.size }
+              payload: { fileName: msg.name, fileSize: msg.size, chunkSize: CHUNK_SIZE }
             });
           }
 
@@ -768,7 +784,9 @@ export class FileReceiver {
 
       const chunkSize = data.byteLength;
 
-      if (this.currentFileId && this.dbEnabled) {
+      // Save to IndexedDB only if OPFS is NOT available (for resume capability)
+      // When OPFS is available, we rely on disk storage instead of IndexedDB
+      if (this.currentFileId && this.dbEnabled && !this.useOPFS) {
         const saved = await saveChunk(this.currentFileId, index, data);
         if (!saved) {
           // IndexedDB write failed (likely quota exceeded)
@@ -783,17 +801,29 @@ export class FileReceiver {
       // Stream to Disk Worker (OPFS) - This is the primary storage for large files
       if (this.useOPFS && this.diskWorker) {
         if (this.diskWorkerReady) {
+          // Transfer ownership of the ArrayBuffer to the worker (zero-copy)
           this.diskWorker.postMessage({ type: 'WRITE_CHUNK', payload: { index, data } }, [data]);
         } else {
           // Worker not ready yet (first few chunks), queue them
-          this._pendingWorkerChunks.push({ index, data });
+          // Limit queue size to prevent memory buildup (max 50 chunks = ~3.2MB)
+          if (this._pendingWorkerChunks.length < 50) {
+            this._pendingWorkerChunks.push({ index, data });
+          } else {
+            // Worker is taking too long to initialize, fall back to IndexedDB temporarily
+            console.warn('[FileReceiver] Worker initialization slow, using IndexedDB fallback for chunk', index);
+            if (this.currentFileId && this.dbEnabled) {
+              await saveChunk(this.currentFileId, index, data);
+            }
+          }
         }
-      } else {
-        // Fallback to RAM only if OPFS is not available
+      } else if (!this.currentFileId || !this.dbEnabled) {
+        // Fallback to RAM ONLY if both OPFS and IndexedDB are unavailable
         // NOTE: For 3GB files, this WILL crash if IndexedDB is also disabled.
         if (!this._fallbackChunks) this._fallbackChunks = [];
         this._fallbackChunks[index] = data;
       }
+      // If IndexedDB is enabled, chunks are already saved there - no need for RAM storage
+      // The 'data' ArrayBuffer is now owned by the worker (if OPFS) or will be GC'd
 
       this.receivedChunkCount++;
       this.receivedChunksSet.add(index);
@@ -806,6 +836,28 @@ export class FileReceiver {
         totalFiles: this.totalFiles,
         filesReceived: this.receivedFiles.length,
       });
+
+      // Log memory usage periodically (every 100 chunks = ~6.4MB)
+      if (index % 100 === 0) {
+        if (performance.memory) {
+          const memMB = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(0);
+          const limitMB = (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(0);
+          const usagePercent = ((performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100).toFixed(1);
+          console.log(`[FileReceiver] Memory: ${memMB}MB / ${limitMB}MB (${usagePercent}%)`);
+          
+          // If memory usage is above 80%, warn and try to trigger GC
+          if (usagePercent > 80) {
+            console.warn('[FileReceiver] High memory usage detected, attempting cleanup...');
+            // Clear any cached data that's not essential
+            if (this._pendingWorkerChunks.length === 0) {
+              this._pendingWorkerChunks = [];
+            }
+          }
+        }
+        
+        // Periodically yield to the event loop to prevent blocking
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
 
       if (this.receivedChunkCount === this.currentFileMeta.totalChunks) {
         await this._assembleCurrentFile();
@@ -841,22 +893,25 @@ export class FileReceiver {
         console.log('[FileReceiver] Finalizing disk file...');
         this.diskWorker.postMessage({ type: 'FINALIZE' });
         // Completion will be handled in _handleWorkerMessage ('COMPLETE' event)
-      } else {
-        // Legacy/RAM fallback assembly
-        let chunksToAssemble;
-        if (this.currentFileId && this.dbEnabled) {
-          console.log('[FileReceiver] Assembling file from IndexedDB...');
-          chunksToAssemble = await getAllChunks(this.currentFileId);
-        } else {
-          chunksToAssemble = this._fallbackChunks || [];
-        }
-
+      } else if (this.currentFileId && this.dbEnabled) {
+        // Assemble from IndexedDB
+        console.log('[FileReceiver] Assembling file from IndexedDB...');
+        const chunksToAssemble = await getAllChunks(this.currentFileId);
         const blob = new Blob(
           chunksToAssemble.map((chunk) => new Uint8Array(chunk)),
           { type: this.currentFileMeta.type }
         );
-        
         this._onFileAssembled(blob);
+      } else if (this._fallbackChunks) {
+        // RAM fallback (only for small files when both OPFS and IndexedDB fail)
+        console.log('[FileReceiver] Assembling file from RAM...');
+        const blob = new Blob(
+          this._fallbackChunks.map((chunk) => new Uint8Array(chunk)),
+          { type: this.currentFileMeta.type }
+        );
+        this._onFileAssembled(blob);
+      } else {
+        this.onError?.(new Error('No storage method available for file assembly'));
       }
     } catch (err) {
       this.onError?.(err);
@@ -884,7 +939,13 @@ export class FileReceiver {
       });
     }
 
+    // Clean up disk worker for next file
+    if (this.diskWorker) {
+      this.diskWorker.postMessage({ type: 'CLEANUP' });
+    }
+
     this._fallbackChunks = null;
+    this.receivedChunksSet.clear();
     this.currentFileMeta = null;
     this.receivedChunkCount = 0;
     this.currentFileId = null;

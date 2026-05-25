@@ -6,7 +6,8 @@
 
 let fileHandle = null;
 let accessHandle = null;
-const CHUNK_SIZE = 65536;
+let writtenChunks = new Set();
+let expectedChunkSize = 262144; // Will be set from constants
 
 self.onmessage = async (e) => {
   const { type, payload } = e.data;
@@ -14,7 +15,9 @@ self.onmessage = async (e) => {
   try {
     switch (type) {
       case 'INIT': {
-        const { fileName, fileSize } = payload;
+        const { fileName, fileSize, chunkSize } = payload;
+        expectedChunkSize = chunkSize || 262144;
+        writtenChunks.clear();
         
         // Get OPFS root
         const root = await navigator.storage.getDirectory();
@@ -39,7 +42,14 @@ self.onmessage = async (e) => {
 
       case 'WRITE_CHUNK': {
         const { index, data } = payload;
-        const offset = index * CHUNK_SIZE;
+        
+        // Skip duplicate chunks (can happen during reconnection)
+        if (writtenChunks.has(index)) {
+          self.postMessage({ type: 'CHUNK_WRITTEN', payload: { index, duplicate: true } });
+          break;
+        }
+        
+        const offset = index * expectedChunkSize;
 
         if (accessHandle) {
           accessHandle.write(new Uint8Array(data), { at: offset });
@@ -49,7 +59,8 @@ self.onmessage = async (e) => {
           await writable.write({ type: 'write', position: offset, data });
           await writable.close();
         }
-
+        
+        writtenChunks.add(index);
         self.postMessage({ type: 'CHUNK_WRITTEN', payload: { index } });
         break;
       }
@@ -64,6 +75,9 @@ self.onmessage = async (e) => {
         // Return the final file handle (as a blob or reference)
         const finalFile = await fileHandle.getFile();
         self.postMessage({ type: 'COMPLETE', payload: { file: finalFile } });
+        
+        // Clean up
+        writtenChunks.clear();
         break;
       }
 
@@ -73,9 +87,9 @@ self.onmessage = async (e) => {
           accessHandle = null;
         }
         if (fileHandle) {
-          // We don't delete here; we keep it until the user downloads
           fileHandle = null;
         }
+        writtenChunks.clear();
         break;
       }
     }

@@ -28,6 +28,7 @@ export function JoinRoom() {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const scanTimerRef = useRef(null);
+  const zxingControlsRef = useRef(null);
 
   const stopScanner = useCallback(() => {
     if (scanTimerRef.current) {
@@ -37,6 +38,10 @@ export function JoinRoom() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
+    }
+    if (zxingControlsRef.current?.stop) {
+      zxingControlsRef.current.stop();
+      zxingControlsRef.current = null;
     }
     if (videoRef.current) {
       videoRef.current.srcObject = null;
@@ -69,11 +74,6 @@ export function JoinRoom() {
     setScannerError(null);
 
     const startScanner = async () => {
-      if (!('BarcodeDetector' in window)) {
-        setScannerError('QR scanner is not supported on this browser.');
-        return;
-      }
-
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' } },
@@ -90,22 +90,39 @@ export function JoinRoom() {
           await videoRef.current.play();
         }
 
-        const detector = new BarcodeDetector({ formats: ['qr_code'] });
-        scanTimerRef.current = setInterval(async () => {
-          if (!videoRef.current || videoRef.current.readyState < 2) return;
-          try {
-            const codes = await detector.detect(videoRef.current);
-            if (!codes?.length) return;
-            const detected = extractRoomCode(codes[0].rawValue || '');
-            if (detected) {
-              setCode(detected);
-              setScannerOpen(false);
-              stopScanner();
+        if ('BarcodeDetector' in window) {
+          const detector = new BarcodeDetector({ formats: ['qr_code'] });
+          scanTimerRef.current = setInterval(async () => {
+            if (!videoRef.current || videoRef.current.readyState < 2) return;
+            try {
+              const codes = await detector.detect(videoRef.current);
+              if (!codes?.length) return;
+              const detected = extractRoomCode(codes[0].rawValue || '');
+              if (detected) {
+                setCode(detected);
+                setScannerOpen(false);
+                stopScanner();
+              }
+            } catch {
+              // keep scanning
             }
-          } catch {
-            // keep scanning
+          }, 300);
+          return;
+        }
+
+        // Fallback for browsers without BarcodeDetector (e.g. Firefox/iOS Safari)
+        const { BrowserQRCodeReader } = await import('@zxing/browser');
+        const reader = new BrowserQRCodeReader();
+        const controls = await reader.decodeFromVideoDevice(undefined, videoRef.current, (result) => {
+          if (!result) return;
+          const detected = extractRoomCode(result.getText?.() || result.text || '');
+          if (detected) {
+            setCode(detected);
+            setScannerOpen(false);
+            stopScanner();
           }
-        }, 300);
+        });
+        zxingControlsRef.current = controls;
       } catch (err) {
         setScannerError(err?.message || 'Could not access camera.');
       }

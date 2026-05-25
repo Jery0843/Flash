@@ -11,6 +11,7 @@
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
+    "@zxing/browser": "^0.2.0",
     "framer-motion": "^12.40.0",
     "jszip": "^3.10.1",
     "lucide-react": "^1.16.0",

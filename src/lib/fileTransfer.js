@@ -509,10 +509,9 @@ export class FileReceiver {
     this._dbUpdateTimer = null;
     this.cancelled = false;
 
-    // OPFS / Disk Worker state
     this.diskWorker = null;
     this.diskWorkerReady = false;
-    this._pendingWorkerChunks = [];
+    this._pendingWorkerMessages = [];
     this.useOPFS = false;
 
     // Callbacks
@@ -524,6 +523,10 @@ export class FileReceiver {
     // Message Queue for sequential processing
     this._messageQueue = [];
     this._processingQueue = false;
+
+    // Assembly synchronization
+    this._assembleResolve = null;
+    this._assembleReject = null;
 
     // Initialize DB support
     this._initDB();
@@ -554,11 +557,11 @@ export class FileReceiver {
       case 'READY':
         console.log('[FileReceiver] DiskWorker ready:', payload.tempName);
         this.diskWorkerReady = true;
-        // Process any chunks that arrived while worker was starting
-        const chunksToSend = [...this._pendingWorkerChunks];
-        this._pendingWorkerChunks = []; // Clear immediately to free memory
-        for (const chunk of chunksToSend) {
-          this.diskWorker.postMessage({ type: 'WRITE_CHUNK', payload: chunk }, [chunk.data]);
+        // Process any messages that arrived while worker was starting
+        const messagesToSend = [...this._pendingWorkerMessages];
+        this._pendingWorkerMessages = []; // Clear immediately to free memory
+        for (const item of messagesToSend) {
+          this.diskWorker.postMessage(item.msg, item.transfer);
         }
         break;
 
@@ -577,15 +580,6 @@ export class FileReceiver {
     }
   }
 
-  // Buffer chunks when worker isn't ready
-  _bufferChunkForWorker(index, data) {
-    // Limit queue size to prevent memory buildup (max 100 chunks = ~6.4MB)
-    if (this._pendingWorkerChunks.length < 100) {
-      this._pendingWorkerChunks.push({ index, data });
-      return true;
-    }
-    return false;
-  }
 
   async _initDB() {
     this.dbEnabled = await isDBAvailable();
@@ -856,15 +850,11 @@ export class FileReceiver {
           // Transfer ownership of the ArrayBuffer to the worker (zero-copy)
           this.diskWorker.postMessage({ type: 'WRITE_CHUNK', payload: { index, data } }, [data]);
         } else {
-          // Worker not ready yet, try to buffer the chunk
-          const buffered = this._bufferChunkForWorker(index, data);
-          if (!buffered) {
-            // Buffer is full, fall back to IndexedDB
-            console.warn('[FileReceiver] Worker buffer full, using IndexedDB fallback for chunk', index);
-            if (this.currentFileId && this.dbEnabled) {
-              await saveChunk(this.currentFileId, index, data);
-            }
-          }
+          // Worker not ready yet, buffer the chunk
+          this._pendingWorkerMessages.push({
+            msg: { type: 'WRITE_CHUNK', payload: { index, data } },
+            transfer: [data]
+          });
         }
       } else if (this.currentFileId && this.dbEnabled) {
         // Save to IndexedDB if OPFS is not available
@@ -902,8 +892,8 @@ export class FileReceiver {
           if (usagePercent > 80) {
             console.warn('[FileReceiver] High memory usage detected, attempting cleanup...');
             // Clear any cached data that's not essential
-            if (this._pendingWorkerChunks.length === 0) {
-              this._pendingWorkerChunks = [];
+            if (this._pendingWorkerMessages.length === 0) {
+              this._pendingWorkerMessages = [];
             }
           }
         }
@@ -946,34 +936,46 @@ export class FileReceiver {
 
     this._clearDbUpdateTimer();
 
-    try {
-      if (this.useOPFS && this.diskWorker) {
-        console.log('[FileReceiver] Finalizing disk file...');
-        this.diskWorker.postMessage({ type: 'FINALIZE' });
-        // Completion will be handled in _handleWorkerMessage ('COMPLETE' event)
-      } else if (this.currentFileId && this.dbEnabled) {
-        // Assemble from IndexedDB
-        console.log('[FileReceiver] Assembling file from IndexedDB...');
-        const chunksToAssemble = await getAllChunks(this.currentFileId);
-        const blob = new Blob(
-          chunksToAssemble.map((chunk) => new Uint8Array(chunk)),
-          { type: this.currentFileMeta.type }
-        );
-        this._onFileAssembled(blob);
-      } else if (this._fallbackChunks) {
-        // RAM fallback (only for small files when both OPFS and IndexedDB fail)
-        console.log('[FileReceiver] Assembling file from RAM...');
-        const blob = new Blob(
-          this._fallbackChunks.map((chunk) => new Uint8Array(chunk)),
-          { type: this.currentFileMeta.type }
-        );
-        this._onFileAssembled(blob);
-      } else {
-        this.onError?.(new Error('No storage method available for file assembly'));
+    return new Promise((resolve, reject) => {
+      this._assembleResolve = resolve;
+      this._assembleReject = reject;
+
+      try {
+        if (this.useOPFS && this.diskWorker) {
+          console.log('[FileReceiver] Finalizing disk file...');
+          if (this.diskWorkerReady) {
+            this.diskWorker.postMessage({ type: 'FINALIZE' });
+          } else {
+            this._pendingWorkerMessages.push({ msg: { type: 'FINALIZE' }, transfer: [] });
+          }
+          // Completion will be handled in _handleWorkerMessage ('COMPLETE' event)
+        } else if (this.currentFileId && this.dbEnabled) {
+          // Assemble from IndexedDB
+          console.log('[FileReceiver] Assembling file from IndexedDB...');
+          getAllChunks(this.currentFileId).then(chunksToAssemble => {
+            const blob = new Blob(
+              chunksToAssemble.map((chunk) => new Uint8Array(chunk)),
+              { type: this.currentFileMeta.type }
+            );
+            this._onFileAssembled(blob);
+          }).catch(reject);
+        } else if (this._fallbackChunks) {
+          // RAM fallback (only for small files when both OPFS and IndexedDB fail)
+          console.log('[FileReceiver] Assembling file from RAM...');
+          const blob = new Blob(
+            this._fallbackChunks.map((chunk) => new Uint8Array(chunk)),
+            { type: this.currentFileMeta.type }
+          );
+          this._onFileAssembled(blob);
+        } else {
+          this.onError?.(new Error('No storage method available for file assembly'));
+          reject(new Error('No storage method available for file assembly'));
+        }
+      } catch (err) {
+        this.onError?.(err);
+        reject(err);
       }
-    } catch (err) {
-      this.onError?.(err);
-    }
+    });
   }
 
   _onFileAssembled(fileOrBlob) {
@@ -1013,6 +1015,12 @@ export class FileReceiver {
     this.currentFileMeta = null;
     
     console.log('[FileReceiver] State cleared, ready for next file');
+
+    if (this._assembleResolve) {
+      this._assembleResolve();
+      this._assembleResolve = null;
+      this._assembleReject = null;
+    }
   }
 }
 

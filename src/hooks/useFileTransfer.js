@@ -47,20 +47,33 @@ export function useFileTransfer() {
   }, []);
 
   const lastNotificationUpdateRef = useRef(0);
+  const lastNotificationProgressRef = useRef({ percentage: -1, bytesTransferred: 0 });
 
   const updateNotification = useCallback((s, state) => {
     if ('Notification' in window && Notification.permission === 'granted' && s) {
       const now = Date.now();
       const progress = Math.round(s.progress || 0);
+      const bytesTransferred = s.bytesTransferred || 0;
+      const last = lastNotificationProgressRef.current;
+      const samePercent = last.percentage === progress;
+      const bytesDelta = Math.abs(bytesTransferred - (last.bytesTransferred || 0));
       
-      // Throttle updates to once every 2 seconds or if progress is 100% or 0%
-      if (now - lastNotificationUpdateRef.current < 2000 && progress > 0 && progress < 100) {
+      // Keep notifications live without spamming: update at least every 800ms,
+      // or sooner when visible progress changed.
+      if (
+        now - lastNotificationUpdateRef.current < 800 &&
+        samePercent &&
+        bytesDelta < (256 * 1024) &&
+        progress > 0 &&
+        progress < 100
+      ) {
         return;
       }
       
       lastNotificationUpdateRef.current = now;
+      lastNotificationProgressRef.current = { percentage: progress, bytesTransferred };
       const title = state === 'sending' ? 'Sending files...' : 'Receiving files...';
-      const body = `${progress}% - ${s.currentFileName || 'File'}`;
+      const body = `${progress}% • ${s.currentFileName || 'File'} • ${Math.round(bytesTransferred / (1024 * 1024))} MB`;
       
       if (navigator.serviceWorker.controller) {
         navigator.serviceWorker.ready.then((registration) => {

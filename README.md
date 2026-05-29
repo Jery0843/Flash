@@ -90,8 +90,8 @@ VITE_TURN_CREDENTIALS_URL=http://localhost:8787/turn-credentials
 For production, set these to your deployed Worker URL:
 
 ```env
-VITE_SIGNALING_URL=wss://blitz-signaling.YOUR_SUBDOMAIN.workers.dev/ws
-VITE_TURN_CREDENTIALS_URL=https://blitz-signaling.YOUR_SUBDOMAIN.workers.dev/turn-credentials
+VITE_SIGNALING_URL=wss://flash-signaling.YOUR_SUBDOMAIN.workers.dev/ws
+VITE_TURN_CREDENTIALS_URL=https://flash-signaling.YOUR_SUBDOMAIN.workers.dev/turn-credentials
 ```
 
 ## 📦 Deployment

@@ -1,5 +1,5 @@
 {
-  "name": "blitz",
+  "name": "flash",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -32,6 +32,6 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
     "vite": "^8.0.12",
-    "wrangler": "^4.94.0"
+    "wrangler": "^4.95.0"
   }
 }
